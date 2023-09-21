@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protected Page</title>
+</head>
+<body>
+    <h1>Welcome to the Protected Page</h1>
+    <p>This page is password protected.</p>
+    
+    <!-- Password form -->
+    <form id="password-form">
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+        <button type="submit">Submit</button>
+    </form>
+
+    <!-- Script to handle password validation -->
+    <script>
+        document.getElementById('password-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            var password = document.getElementById('password').value;
+            
+            // Replace 'your_password' with the actual password
+            if (password === 'your_password') {
+                // Correct password, redirect to the protected content
+                window.location.href = 'protected_content.html';
+            } else {
+                alert('Incorrect password. Please try again.');
+            }
+        });
+    </script>
+</body>
+</html>
