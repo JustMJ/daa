@@ -1,0 +1,3404 @@
+---
+title: "Report Prepared for Devon Air Ambulance"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "Output") })
+output:
+  html_document:
+    number_sections: no
+    theme: flatly
+    toc: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '1'
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+subtitle: Connections that Drive Performance
+---
+
+
+```{css sidenote, echo = FALSE}
+
+.sidenote, .marginnote { 
+  float: right;
+  clear: right;
+  margin-right: -60%;
+  width: 57%;     
+  margin-top: 0;
+  margin-bottom: 0;
+  font-size: 1.1rem;
+  line-height: 1.3;
+  vertical-align: baseline;
+  position: -webkit-sticky;
+  position: sticky;
+  top: 5rem;
+  }
+```
+
+```{r setoverall, cache=FALSE, include= FALSE}
+library(knitr)
+knitr::opts_knit$set(root.dir=normalizePath("./"),
+                     echo =FALSE,
+                     message = FALSE,
+                     warning= FALSE,
+                     results = 'hide')
+```
+
+```{r setchunk, cache=FALSE, include=FALSE}
+opts_chunk$set(fig.path ="./Figures/")
+```
+
+```{r echo=FALSE, cache=FALSE, message=FALSE, warning=FALSE, results='hide'}
+library(pacman)
+p_load(extrafont, 
+ ggrepel, 
+ gridExtra,
+igraph,
+kableExtra,
+lubridate,
+multicon,
+RColorBrewer,
+readxl,
+reshape2,
+scales,
+stringr,
+tidyverse,
+visNetwork,
+plotly,
+splitstackshape,
+here,
+conflicted,
+forcats,
+tidytext,
+janitor,
+testthat,
+magrittr,
+cowplot,
+dplyr,
+rmarkdown,
+colorspace,
+paletteer,
+psych,
+DT)
+
+conflict_prefer("filter","dplyr")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# custom ggplot theme
+# thanks to https://hk.saowen.com/a/27af386c9adcb4a334b95f022fe9ed308c19fb91e018b014800f74d4c92458c9
+theme_tmt <- function() {
+  
+  # brand colors
+  palette <- brewer.pal("Greys", n=9)
+  color.background = "#FFFFFF" # chart background
+  color.grid.major = palette[3] # chart gridlines
+  color.axis.text = "#666666" # 
+  color.axis.title = "#666666" # 
+  color.title = "#666666"
+  color.subtitle = "#666666"
+
+  # begin construction of chart
+  theme_bw(base_size=12) +
+        
+  # set the entire chart region to a light gray color
+  theme(panel.background=element_rect(fill=color.background, color=color.background)) +
+  theme(plot.background=element_rect(fill=color.background, color=color.background)) +
+  theme(panel.border=element_rect(color=color.background)) +
+      
+  # format the grid
+  theme(panel.grid.major=element_line(color=color.grid.major,size=.25)) +
+  theme(panel.grid.minor=element_blank()) +
+  theme(axis.ticks=element_blank()) +
+        
+  # format the legend, but hide by default
+  theme(legend.position="none") +
+  theme(legend.background = element_rect(fill=color.background)) +
+  theme(legend.text = element_text(size=7,color=color.axis.title)) +
+        
+  # set title and axis labels, and format these and tick marks
+  theme(plot.title=element_text(color=color.title, size=30, vjust=1.25, family="Arial", hjust = 0.5)) +
+  theme(plot.subtitle=element_text(color=color.subtitle, size=12, family="Arial",  hjust = 0.5))  +
+  theme(axis.text.x=element_text(size=10,color=color.axis.text, family="Arial")) +
+  theme(axis.text.y=element_text(size=10,color=color.axis.text, family="Arial")) +
+  theme(axis.title.x=element_text(size=12,color=color.axis.title, vjust=0, family="Arial")) +
+  theme(axis.title.y=element_text(size=12,color=color.axis.title, vjust=1.25, family="Arial")) +
+  theme(plot.caption=element_text(size=8,color=color.axis.title, vjust=1.25, family="Arial")) +
+    
+  # legend  
+  theme(legend.position="right") +
+  theme(legend.text=element_text(size=10,color=color.axis.text, family="Arial")) +
+  theme(legend.title=element_text(size=10,color=color.axis.text, family="Arial")) +
+  theme(legend.key = element_rect(colour = NA, fill = NA)) +
+  
+  # plot margins
+  theme(plot.margin = unit(c(0.75, 0.75, 0.75, 0.75), "cm"))
+
+}
+
+# set theme for all plots by default
+theme_set(theme_tmt())
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# define inline variables
+org_name <- "Devon Air Ambulance"
+tmt_name <- "Senior Leadership Team"
+tmt_abbrev <- "SLT"
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# define paths to files
+t1_panel_file <- here("..","devon_air_t1","Data","ORG_x_Panel_12-13.xlsx")
+t1_panel_sheetname<- "DevonAir_Panel_11_16"
+t1_survey_file<- here("..","devon_air_t1","Data","Final data to share Org X 12-13-21.xlsx")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# load the list into a dataframe
+t1_survey <- read_excel(t1_survey_file)
+
+# clean up survey data
+t1_survey <- t1_survey %>%
+  slice(-1)
+```
+  
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# read t1_panel data from Excel into a DataFrame
+t1_panel <- read_excel(t1_panel_file,sheet = t1_panel_sheetname) 
+
+# add team number to columns FT1 columns
+names(t1_panel)[names(t1_panel)=="FTname"] <- "FT1name"
+names(t1_panel)[names(t1_panel)=="FTleader"] <- "FT1leader"
+names(t1_panel)[names(t1_panel)=="FTnum"] <- "FT1num"
+names(t1_panel)[names(t1_panel)=="FTrole"] <- "FT1role"
+names(t1_panel)[names(t1_panel)=="FTsize"] <- "FT1size"
+names(t1_panel)[names(t1_panel)=="FT1"] <- "FT11"
+names(t1_panel)[names(t1_panel)=="FT2"] <- "FT12"
+names(t1_panel)[names(t1_panel)=="FT3"] <- "FT13"
+names(t1_panel)[names(t1_panel)=="FT4"] <- "FT14"
+names(t1_panel)[names(t1_panel)=="FT5"] <- "FT15"
+names(t1_panel)[names(t1_panel)=="FT6"] <- "FT16"
+names(t1_panel)[names(t1_panel)=="FT7"] <- "FT17"
+names(t1_panel)[names(t1_panel)=="FT8"] <- "FT18"
+names(t1_panel)[names(t1_panel)=="FT9"] <- "FT19"
+
+## exclude board members
+t1_panel %<>% filter(FT1name != "Board")
+
+t1_survey %<>% 
+  filter(t1_survey$ID %in% t1_panel$ID)
+
+# subset panel to only columns that start with "FT" plus a number
+t1_teams <- t1_panel[ , grep("FT\\d+" , names(t1_panel))]
+
+# get the teams represented in the panelset
+t1_team_names <- substr(names(t1_teams[grep("FT\\d+\\leader", names(t1_teams))]), 0, 3)
+
+# create an empty list to hold individual team panelframes
+t1_team_panel = list()
+
+# iterate over each team...
+for (t in t1_team_names){
+
+  # grab the columns associated with that team...
+  team_t <- t1_teams %>% select(starts_with(t))
+
+  # rename columns by dropping team number asscoiated with the team
+  colnames(team_t) <- gsub(t, substr(t, 1, 2), colnames(team_t))
+
+  # add column for team
+  team_t$team_num <- t
+
+  # add team panel to the list
+  t1_team_panel[[t]] <- team_t
+}
+
+# combine list into one panelframe
+t1_team_panel_combined <- bind_rows(t1_team_panel)
+
+# get only the unique rows
+t1_team_panel_combined <- unique(t1_team_panel_combined)
+
+# drop rows where the whole row is blank
+t1_team_panel_combined <- t1_team_panel_combined[apply(t1_team_panel_combined,1,function(x)any(!is.na(x))),]
+
+# drop unnecessary columns
+t1_team_panel_combined$FTrole <- NULL
+t1_team_panel_combined$FTsize <- NULL
+
+t1_team_panel_combined <- t1_team_panel_combined %>% filter(FTname != "Board")
+
+# reshape the data, rename column, and drop records where the name is blank
+t1_all_teams <- t1_team_panel_combined %>%
+  melt(., id=c("FTname", "team_num")) %>%
+  rename("team" = "FTname",
+         "role" = "variable",
+         "name" = "value") %>%
+  filter(!is.na(name)) %>%
+  mutate(
+    team = gsub("  ", " ", team),
+    team = gsub("team", "", gsub("Team", "", team)),
+    team  = trimws(team)
+  ) %>%
+  distinct()
+#View(all_teams)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+t1_demographics <- here("..","devon_air_t1","Data","Org x data IDs survey info template.xlsx")
+t1_demographics<- read_xlsx(t1_demographics,sheet="Participant Info",skip = 1)
+t1_demographics<- t1_demographics %>%
+  select(ID, Gender,`Tenure (years)`) %>%
+  mutate(Gender = factor(Gender))  %>%
+  distinct(ID,.keep_all=TRUE) %>%
+  transmute(
+    ID,
+    Gender,
+    Tenure = str_extract(`Tenure (years)`,"\\d+"))
+  
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# clean up teams dataframe
+t1_teams <- t1_all_teams %>%
+  filter(role != "FTnum") %>%
+  filter(role != "FT1") %>%
+  mutate(
+    role = ifelse(role == "FTleader", "TL", "DR")
+  ) %>%
+  distinct(team, role, name, .keep_all = TRUE) %>%
+  arrange(desc(role)) %>%
+  distinct(team, name, .keep_all=TRUE)
+
+# inspect data
+#View(teams)
+         
+# add the ids and tenure to the teams
+t1_teams <- t1_teams %>%
+  left_join(t1_demographics %>% select(ID, Gender,Tenure), by=c("name"="ID"))
+
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE, results ='hide'}
+# add the ids to the teams
+
+# inspect data
+#View(teams)
+
+# add more teams without members
+t1_no_team <- t1_panel %>%
+  filter(
+    is.na(FT1leader)
+  ) %>%
+  transmute(
+    ID, 
+    team = FT1name
+  ) %>%
+  distinct() %>%
+  mutate(
+    team = gsub("  ", " ", team),
+    team = gsub("team", "", gsub("Team", "", team)),
+    team  = trimws(team),
+    role = NA,
+    team_num=NA
+  ) %>%
+  left_join(t1_demographics %>% select(ID,Gender,Tenure),by=c("ID")) %>%
+  transmute(
+    team,
+    team_num,
+    role,
+    name = ID,
+    Gender,
+    Tenure)
+
+
+
+# inspect data
+#View(no_team)
+
+# combine team with and without members
+#teams <- rbind(teams, no_team)
+
+# inspect data
+
+#View(teams)
+t1_teams <- t1_teams %>%
+  rename(gender = Gender)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, results='hide'}
+# create unique people in data with primary team
+t1_people <- t1_teams %>%
+  arrange(desc(role)) %>%
+  select(
+  name, team, gender,Tenure
+  ) %>%
+  distinct(
+    name, .keep_all = TRUE
+  ) %>%
+  mutate(
+    gender = recode_factor(gender, `1` = "Male", `2` = "Female"),
+    tenure = Tenure
+  )
+# inspect data
+#View(people)
+
+# create tenure groups
+t1_people$tenure_grp <- t1_people$tenure
+t1_people$tenure_grp <- ifelse((t1_people$tenure <= 3), '0-3 years', t1_people$tenure_grp)
+t1_people$tenure_grp <- ifelse((t1_people$tenure > 3 & t1_people$tenure <= 6) , '4-6 years', t1_people$tenure_grp)
+t1_people$tenure_grp <- ifelse((t1_people$tenure > 6 & t1_people$tenure <= 9) , '7-9 years', t1_people$tenure_grp)
+t1_people$tenure_grp <- ifelse((t1_people$tenure > 9 & t1_people$tenure <= 12) , '10-12 years', t1_people$tenure_grp)
+t1_people$tenure_grp <- factor(t1_people$tenure_grp, ordered = TRUE, levels = c("0-3 years", "4-6 years", "7-9 years", "10-12 years"))
+t1_people$tenure_grp <- ifelse((t1_people$tenure <= 5), '0-5 years', t1_people$tenure_grp)
+t1_people$tenure_grp <- ifelse((t1_people$tenure > 5  & t1_people$tenure <= 10) , '5-10 years', t1_people$tenure_grp)
+t1_people$tenure_grp <- ifelse((t1_people$tenure > 10 & t1_people$tenure <= 15) , '10-15 years', t1_people$tenure_grp)
+t1_people$tenure_grp <- ifelse((t1_people$tenure > 15 & t1_people$tenure <= 20) , '15-20 years', t1_people$tenure_grp)
+t1_people$tenure_grp <- ifelse((t1_people$tenure > 20 & t1_people$tenure <= 25) , '20-25 years', t1_people$tenure_grp)
+t1_people$tenure_grp <- ifelse((t1_people$tenure > 25 & t1_people$tenure <= 30) , '25-30 years', t1_people$tenure_grp)
+t1_people$tenure_grp <- ifelse((t1_people$tenure > 30 & t1_people$tenure <= 35) , '30-35 years', t1_people$tenure_grp)
+t1_people$tenure_grp <- ifelse((t1_people$tenure > 35 & t1_people$tenure <= 40) , '35-40 years', t1_people$tenure_grp)
+t1_people$tenure_grp <- factor(t1_people$tenure_grp, ordered = TRUE, levels = c("0-5 years", 
+                                                                          "5-10 years", 
+                                                                          "10-15 years", 
+                                                                          "15-20 years",
+                                                                          "20-25 years",
+                                                                          "25-30 years",
+                                                                          "30-35 years",
+                                                                          "35-40 years"
+                                                                          ))
+
+# inspect data
+#View(t1_people)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, results='hide'}
+# define abbreviations for team names
+team_names <- data.frame(teams = c(
+  "Senior Leadership=SLT",
+  "Income Generation=IG", 
+  "Support=Support",
+  "Finance & Infrastructure=F&I",
+  "Helicopter Services=HS",
+  "People=People",
+  "Patient Services=PS",
+  "Public Engagement=PE",
+  "Flight Operations=Flight Ops"
+  )
+)
+
+# split team names into full and short names
+team_names <- team_names %>%
+  separate(teams,  sep = "=", into=c("full", "short"))
+
+# replace full team name with abbreviated team name
+
+# look for people without a team 
+t1_teams %>%
+  filter(is.na(team))
+```
+
+<div class="marginnote">`r kable(team_names, col.names = NULL) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "center", font_size = 12)`</div>
+  
+```{r message=FALSE, warning=FALSE, include=FALSE, results='hide'}
+# reverse code necessary variables
+t1_survey <- t1_survey %>%
+  mutate(across(contains("I_FT"),~ as.numeric(.))) %>%
+  mutate(across(contains("A_FT"),~ as.numeric(.))) %>%
+  mutate(across(contains("FTflead"),~ as.numeric(.))) %>%
+   mutate(across(starts_with("LSS"),~ as.numeric(.)))
+
+t1_survey<- t1_survey %>% 
+  mutate(
+    I_FTtaski_2  = 5 - I_FTtaski_2,
+    I_FT2taski_2 = 5 - I_FT2taski_2,
+    I_FT3taski_2 = 5 - I_FT3taski_2,
+    A_FTtaski_2  = 5 - A_FTtaski_2,
+    A_FT2taski_2 = 5 - A_FT2taski_2,
+    A_FT3taski_2 = 5 - A_FT3taski_2,
+    FTflead_14 = 6 - FTflead_14,
+    LSS_2 = 5 - LSS_3,
+    LSS_3 = 5 - LSS_3
+  )
+
+# create all composite variables
+t1_scores <- t1_survey %>%
+  transmute(
+    ID,
+    clarity = pmap_dbl(list(stratc_1,stratc_2,stratc_3), ~mean(as.numeric(c(...)),na.rm = T)),
+    correct = pmap_dbl(list(stratc_4, stratc_6, stratc_8, stratc_10,stratc_11),~mean(as.numeric(c(...)),na.rm=T)),
+    commit = pmap_dbl(list(stratc_5, stratc_7, stratc_9),~mean(as.numeric(c(...)),na.rm=T)),
+    direction_ft1 = pmap_dbl(list(FTDAC_1,FTDAC_4,  FTDAC_7),~mean(as.numeric(c(...)),na.rm=T)),
+    direction_ft2 = pmap_dbl(list(FT2DAC_1, FT2DAC_4, FT2DAC_7), ~mean(as.numeric(c(...)),na.rm=T)),
+    alignment_ft1 = pmap_dbl(list(FTDAC_2,FTDAC_5,FTDAC_8),~mean(as.numeric(c(...)),na.rm=T)),
+    alignment_ft2 = pmap_dbl(list(FT2DAC_2, FT2DAC_5, FT2DAC_8),~mean(as.numeric(c(...)),na.rm=T)),
+    commitment_ft1 = pmap_dbl(list(FTDAC_3, FTDAC_6,FTDAC_9),~mean(as.numeric(c(...)),na.rm=T)),
+    commitment_ft2 = pmap_dbl(list(FT2DAC_3, FT2DAC_6, FT2DAC_9),~mean(as.numeric(c(...)),na.rm=T)),
+    interdependence_ft1 = pmap_dbl(select(., starts_with("FTjdm_")), ~mean(as.numeric(c(...)),na.rm=T)),
+    interdependence_ft2 = pmap_dbl(select(., starts_with("FT2jdm_")), ~mean(as.numeric(c(...)),na.rm=T)),
+    cohesion_ft1 = pmap_dbl(select(., starts_with("FTrelcoh_")), ~mean(as.numeric(c(...)),na.rm=T)),
+    cohesion_ft2 = pmap_dbl(select(., starts_with("FT2relcoh_")), ~mean(as.numeric(c(...)),na.rm=T)),
+    joint_decision_making_ft1 = pmap_dbl(select(., starts_with("A_FTtaski_")),~mean(as.numeric(c(...)),na.rm=T)),
+    joint_decision_making_ft2 = pmap_dbl(select(., starts_with("A_FT2taski_")),~mean(as.numeric(c(...)),na.rm=T)),
+    a_taski_ft1 = pmap_dbl(select(., starts_with("A_FTtaski_")), ~mean(as.numeric(c(...)),na.rm=T)),
+    a_taski_ft2 = pmap_dbl(select(., starts_with("A_FT2taski_")), ~mean(as.numeric(c(...)),na.rm=T)),
+    i_taski_ft1 = pmap_dbl(select(., starts_with("I_FTtaski_")),  ~mean(as.numeric(c(...)),na.rm=T)),
+    i_taski_ft2 = pmap_dbl(select(., starts_with("I_FT2taski_")), ~mean(as.numeric(c(...)),na.rm=T))
+  )
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, results='hide'}
+# define paths to files
+t2_panel_file <- here("Data","DevonAir_Panel_4-4.csv")
+t2_survey_file<- here("Data","DAA UEBS - 2023_June 2, 2023_Raw_Values.csv")
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, results='hide'}
+# load the list into a dataframe
+t2_survey <- read_csv(t2_survey_file)
+
+# clean up survey data
+t2_survey <- t2_survey %>%
+  slice(-c(1:2))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# read panel data from Excel into a DataFrame
+t2_panel <- read_csv(t2_panel_file) 
+
+# add team number to columns FT1 columns
+names(t2_panel)[names(t2_panel)=="FTname"] <- "FT1name"
+names(t2_panel)[names(t2_panel)=="FTleader"] <- "FT1leader"
+names(t2_panel)[names(t2_panel)=="FTnum"] <- "FT1num"
+names(t2_panel)[names(t2_panel)=="FTrole"] <- "FT1role"
+names(t2_panel)[names(t2_panel)=="FTsize"] <- "FT1size"
+
+names(t2_panel)[names(t2_panel)=="FT10"] <- "FT110"
+names(t2_panel)[names(t2_panel)=="FT11"] <- "FT111"
+names(t2_panel)[names(t2_panel)=="FT12"] <- "FT112"
+
+names(t2_panel)[names(t2_panel)=="FT1"] <- "FT11"
+names(t2_panel)[names(t2_panel)=="FT2"] <- "FT12"
+names(t2_panel)[names(t2_panel)=="FT3"] <- "FT13"
+names(t2_panel)[names(t2_panel)=="FT4"] <- "FT14"
+names(t2_panel)[names(t2_panel)=="FT5"] <- "FT15"
+names(t2_panel)[names(t2_panel)=="FT6"] <- "FT16"
+names(t2_panel)[names(t2_panel)=="FT7"] <- "FT17"
+names(t2_panel)[names(t2_panel)=="FT8"] <- "FT18"
+names(t2_panel)[names(t2_panel)=="FT9"] <- "FT19"
+
+
+
+# subset panel to only columns that start with "FT" plus a number
+t2_teams <- t2_panel[ , grep("FT\\d+" , names(t2_panel))]
+
+# get the teams represented in the panelset
+t2_team_names <- substr(names(t2_teams[grep("FT\\d+\\leader", names(t2_teams))]), 0, 3)
+
+# create an empty list to hold individual team panelframes
+t2_team_panel = list()
+
+# iterate over each team...
+for (t in t2_team_names){
+
+  # grab the columns associated with that team...
+  team_t <- t2_teams %>% select(starts_with(t))
+
+  # rename columns by dropping team number asscoiated with the team
+  colnames(team_t) <- gsub(t, substr(t, 1, 2), colnames(team_t))
+
+  # add column for team
+  team_t$team_num <- t
+
+  # add team panel to the list
+  t2_team_panel[[t]] <- team_t
+}
+
+# combine list into one panelframe
+t2_team_panel_combined <- bind_rows(t2_team_panel)
+
+# get only the unique rows
+t2_team_panel_combined <- unique(t2_team_panel_combined)
+
+# drop rows where the whole row is blank
+t2_team_panel_combined <- t2_team_panel_combined[apply(t2_team_panel_combined,1,function(x)any(!is.na(x))),]
+
+# drop unnecessary columns
+t2_team_panel_combined$FTrole <- NULL
+t2_team_panel_combined$FTsize <- NULL
+
+t2_team_panel_combined <- t2_team_panel_combined %>% filter(FTname != "Board")
+
+# reshape the data, rename column, and drop records where the name is blank
+t2_all_teams <- t2_team_panel_combined %>%
+  melt(., id=c("FTname", "team_num")) %>%
+  rename("team" = "FTname",
+         "role" = "variable",
+         "name" = "value") %>%
+  filter(!is.na(name)) %>%
+  mutate(
+    team = gsub("  ", " ", team),
+    team = gsub("team", "", gsub("Team", "", team)),
+    team  = trimws(team)
+  ) %>%
+  distinct()
+#View(all_teams)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, results='hide'}
+t2_panel %<>% 
+  mutate(`First Name` = str_replace_all(`First Name`,"\\s","")) 
+
+
+t2_demographics <- here("Data","Survey Information Template 2023 - v 2 april 2023.xlsx")
+t2_demographics<- read_excel(t2_demographics,sheet="Participant Info",skip = 1)
+t2_demographics<- t2_demographics %>%
+  mutate(`Preferred First Name` = str_replace_all(`Preferred First Name`,"\\s","")) %>% 
+  left_join(t2_panel %>% select(c(`External Data Reference`,  `First Name`,`Last Name`)),by=c("Preferred First Name" = "First Name","Last Name"= "Last Name")) %>%
+  rename(ID = `External Data Reference`) %>% 
+  mutate(Gender = factor(Gender))  %>%
+  rename(Tenure = 'Tenure (years)') %>% 
+  distinct(ID,.keep_all=TRUE) %>% 
+  mutate(Tenure = str_extract(Tenure,"^\\d{1,2}")) %>%
+  mutate(name = paste0(`Preferred First Name`," ",`Last Name`))  %>%
+  slice(-45)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# clean up teams dataframe
+t2_teams <- t2_all_teams %>%
+  filter(role != "FTnum") %>%
+  filter(role != "FT1") %>%
+  mutate(
+    role = ifelse(role == "FTleader", "TL", "DR")
+  ) %>%
+  distinct(team, role, name, .keep_all = TRUE) %>%
+  arrange(desc(role)) %>%
+  distinct(team, name, .keep_all=TRUE) %>%
+  mutate(name = str_replace(name,"Jo Ann Rigby","JoAnn Rigby"))
+
+# inspect data
+#View(teams)
+         
+# add the ids and tenure to the teams
+t2_teams <- t2_teams %>%
+  left_join(t2_demographics %>% select(ID, Gender,Tenure,name), by=c("name"))
+
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE, results ='hide'}
+# add the ids to the teams
+
+# inspect data
+#View(teams)
+
+# add more teams without members
+t2_no_team <- t2_panel %>%
+  filter(
+    is.na(FT1leader)
+  ) %>%
+  transmute(
+    ID = as.character(`External Data Reference`), 
+    team = FT1name
+  ) %>%
+  distinct() %>%
+  mutate(
+    team = gsub("  ", " ", team),
+    team = gsub("team", "", gsub("Team", "", team)),
+    team  = trimws(team),
+    role = NA,
+    team_num=NA
+  ) %>%
+  mutate(ID = as.double(ID)) %>% 
+  left_join(t2_demographics %>% select(ID,Gender,Tenure),by=c("ID")) %>%
+  transmute(
+    team,
+    team_num,
+    role,
+    name = ID,
+    Gender,
+   Tenure)
+
+
+
+# inspect data
+#View(no_team)
+
+# combine team with and without members
+#teams <- rbind(teams, no_team)
+
+# inspect data
+
+#View(teams)
+t2_teams <- t2_teams %>%
+  rename(gender = Gender)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# create unique people in data with primary team
+t2_panel<- t2_panel %>% 
+  mutate(name = paste0(`First Name`," ",`Last Name`))
+
+
+t2_people <- t2_teams %>%
+  arrange(desc(role)) %>%
+  select(
+  name, team, gender,Tenure
+  ) %>%
+  distinct(
+    name, .keep_all = TRUE
+  ) %>%
+  mutate(
+    gender = recode_factor(gender, `1` = "Male", `2` = "Female"),
+  ) %>%
+  rename(tenure = "Tenure") %>%
+  left_join(t2_panel %>% select(`External Data Reference`,name),by=c("name")) %>%
+  rename(ID = `External Data Reference`)
+
+
+  
+# inspect data
+#View(people)
+
+# create tenure groups
+t2_people$tenure_grp <- t2_people$tenure
+t2_people %<>% mutate(tenure = as.numeric(tenure))
+t2_people$tenure_grp <- ifelse((t2_people$tenure <= 5), '0-5 years', t2_people$tenure_grp)
+t2_people$tenure_grp <- ifelse((t2_people$tenure > 5  & t2_people$tenure <= 10) , '5-10 years', t2_people$tenure_grp)
+t2_people$tenure_grp <- ifelse((t2_people$tenure > 10 & t2_people$tenure <= 15) , '10-15 years', t2_people$tenure_grp)
+t2_people$tenure_grp <- ifelse((t2_people$tenure > 15 & t2_people$tenure <= 20) , '15-20 years', t2_people$tenure_grp)
+t2_people$tenure_grp <- ifelse((t2_people$tenure > 20 & t2_people$tenure <= 25) , '20-25 years', t2_people$tenure_grp)
+t2_people$tenure_grp <- ifelse((t2_people$tenure > 25 & t2_people$tenure <= 30) , '25-30 years', t2_people$tenure_grp)
+t2_people$tenure_grp <- ifelse((t2_people$tenure > 30 & t2_people$tenure <= 35) , '30-35 years', t2_people$tenure_grp)
+t2_people$tenure_grp <- ifelse((t2_people$tenure > 35 & t2_people$tenure <= 40) , '35-40 years', t2_people$tenure_grp)
+t2_people$tenure_grp <- factor(t2_people$tenure_grp, ordered = TRUE, levels = c("0-5 years", 
+                                                                          "5-10 years", 
+                                                                          "10-15 years", 
+                                                                          "15-20 years",
+                                                                          "20-25 years",
+                                                                          "25-30 years",
+                                                                          "30-35 years",
+                                                                          "35-40 years"
+                                                                          ))
+
+# inspect data
+#View(t2_people)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# define abbreviations for team names
+t2_teams<- t2_teams %>%
+  left_join(team_names,by=c("team" = "full")) %>% 
+  rename(abbrev = short)
+
+# look for people without a team 
+t2_teams %>%
+  filter(is.na(team))
+# look for people without a team 
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, results='hide'}
+# reverse code necessary variables
+t2_survey <- t2_survey %>%
+  mutate(across(contains("I_FT"),~ as.numeric(.))) %>%
+  mutate(across(contains("A_FT"),~ as.numeric(.))) %>%
+  mutate(across(contains("FTflead"),~ as.numeric(.))) %>%
+   mutate(across(starts_with("LSS"),~ as.numeric(.)))
+
+t2_survey<- t2_survey %>% 
+  mutate(
+    I_FTtaski_2  = 5 - I_FTtaski_2,
+    I_FT2taski_2 = 5 - I_FT2taski_2,
+    I_FT3taski_2 = 5 - I_FT3taski_2,
+    A_FTtaski_2  = 5 - A_FTtaski_2,
+    A_FT2taski_2 = 5 - A_FT2taski_2,
+    A_FT3taski_2 = 5 - A_FT3taski_2,
+    FTflead_14 = 6 - FTflead_14,
+    LSS_2 = 5 - LSS_3,
+    LSS_3 = 5 - LSS_3
+  )
+
+
+# create all composite variables
+t2_scores <- t2_survey %>%
+  transmute(
+    ID= ExternalReference,
+    clarity = pmap_dbl(list(stratc_1,stratc_2,stratc_3), ~mean(as.numeric(c(...)),na.rm = T)),
+    correct = pmap_dbl(list(stratc_4, stratc_6, stratc_8, stratc_10,stratc_11),~mean(as.numeric(c(...)),na.rm=T)),
+    commit = pmap_dbl(list(stratc_5, stratc_7, stratc_9),~mean(as.numeric(c(...)),na.rm=T)),
+    direction_ft1 = pmap_dbl(list(FTDAC_1,FTDAC_4,  FTDAC_7),~mean(as.numeric(c(...)),na.rm=T)),
+    direction_ft2 = pmap_dbl(list(FT2DAC_1, FT2DAC_4, FT2DAC_7), ~mean(as.numeric(c(...)),na.rm=T)),
+    alignment_ft1 = pmap_dbl(list(FTDAC_2,FTDAC_5,FTDAC_8),~mean(as.numeric(c(...)),na.rm=T)),
+    alignment_ft2 = pmap_dbl(list(FT2DAC_2, FT2DAC_5, FT2DAC_8),~mean(as.numeric(c(...)),na.rm=T)),
+    commitment_ft1 = pmap_dbl(list(FTDAC_3, FTDAC_6,FTDAC_9),~mean(as.numeric(c(...)),na.rm=T)),
+    commitment_ft2 = pmap_dbl(list(FT2DAC_3, FT2DAC_6, FT2DAC_9),~mean(as.numeric(c(...)),na.rm=T)),
+    interdependence_ft1 = pmap_dbl(select(., starts_with("FTjdm_")), ~mean(as.numeric(c(...)),na.rm=T)),
+    interdependence_ft2 = pmap_dbl(select(., starts_with("FT2jdm_")), ~mean(as.numeric(c(...)),na.rm=T)),
+    cohesion_ft1 = pmap_dbl(select(., starts_with("FTrelcoh_")), ~mean(as.numeric(c(...)),na.rm=T)),
+    cohesion_ft2 = pmap_dbl(select(., starts_with("FT2relcoh_")), ~mean(as.numeric(c(...)),na.rm=T)),
+    joint_decision_making_ft1 = pmap_dbl(select(., starts_with("A_FTtaski_")),~mean(as.numeric(c(...)),na.rm=T)),
+    joint_decision_making_ft2 = pmap_dbl(select(., starts_with("A_FT2taski_")),~mean(as.numeric(c(...)),na.rm=T)),
+    a_taski_ft1 = pmap_dbl(select(., starts_with("A_FTtaski_")), ~mean(as.numeric(c(...)),na.rm=T)),
+    a_taski_ft2 = pmap_dbl(select(., starts_with("A_FT2taski_")), ~mean(as.numeric(c(...)),na.rm=T)),
+    i_taski_ft1 = pmap_dbl(select(., starts_with("I_FTtaski_")),  ~mean(as.numeric(c(...)),na.rm=T)),
+    i_taski_ft2 = pmap_dbl(select(., starts_with("I_FT2taski_")), ~mean(as.numeric(c(...)),na.rm=T))
+  )
+```
+
+# Executive Summary  
+
+This report summarizes the insights from a study examining communication and collaboration within Devon Air Ambulance to offer insights regarding current patterns of collaboration, strategic alignment, and organizational performance. The main focus of this report is on the current functioning of Devon Air Ambulance (Time 2), however, as appropriate, we will make comparisons to the data collected at Time 1 and note relevant changes. At Time 2, `r  t2_panel %>% filter(Role != "BM") %>% nrow()` people were invited to participate in the survey. `r t2_survey %>% select(ExternalReference) %>% mutate_all(as.double) %>%  left_join(t2_panel,by=c("ExternalReference" = 'External Data Reference')) %>% filter(Role != "BM") %>% nrow()` completed the survey, resulting in a `r scales::percent(t2_survey %>% select(ExternalReference) %>% mutate_all(as.double) %>%  left_join(t2_panel,by=c("ExternalReference" = 'External Data Reference')) %>% filter(Role != "BM") %>% nrow()/t2_panel %>% filter(Role != "BM") %>% nrow())` response rate.  
+
+Key findings in this report include:  
+
+**Section 1**  
+
+* Senior Leadership Team members believe that Devon Air Ambulance continues to exceed expectations for two of its top key performance indicators (i.e., growth and sales). However, it is notable that expectations were not met for Free Cash Flow, which has increased in importance.  
+
+**Section 2**  
+
+* Overall, strong levels of strategic readiness (i.e., combined clarity, appropriateness, commitment) remain. All teams are above the target threshold suggesting widespread readiness throughout Devon Air Ambulance.    
+* A deeper analysis of by team also indicates that there may be opportunities to boost the strategic readiness of Flight Ops and People, both of these teams are currently below the target threshold.  
+* In terms of prioritization, it is notable that the Senior Leadership team’s focus on Organizational Culture decreased slightly, at current the lowest focus among all the teams. Primary focus of the Senior Leadership Team is Fundraising and Patient Benefits. This is consistent with other data showing that increasing fundraising income and increasing efficacy remain at the forefront of SLT members minds. Of course, not all teams can give all priorities equal weight, so it may be helpful to review the chart using the lens of what each team is tasked. 
+
+**Section 3**  
+
+* Strategy formulation and implementation conversations remain concentrated in a small group of people (removing the top 10% of employees reduces the connectivity of the network by 19.1% and 17.4% respectively).  
+* The Public Engagement group, followed by the Senior Leadership Team, and Patient Services, and Finance & Infrastructure are most engaged in conversations about strategy development and implementation.  
+* The Senior Leadership Team’s strategic conversations occur across a wide range of groups, but most often with Patient Services and Finance & Infrastructure, and Public Engagement. Many more of these conversations are also occurring with other members of the Senior Leadership Team in comparison to Time 1.  
+
+**Section 4**  
+
+* The Senior Leadership Team remains a central hub in the strategic communication network, but the levels of strategic communication among other leadership teams have increased in comparison to Time 1.
+* There may be opportunities to improve strategic communication between Support and Income Generation, Helicopter Services, and Patient Services.
+* There is a notable perceived goal misalignment between Flight Ops and the Senior Leadership Team, which may be undermining the strategic readiness of Flight Ops. 
+* Intergroup trust perceptions have dropped slightly since Time 1, while intergroup competence perceptions have decrease for some groups (Finance & Infrastructure, People) and increased for others (Support, Patient Services, Senior Leadership Team). Notably Flight Operations has the highest external competence and trust perception while Public Engagement’s is among the lowest. 
+
+**Section 5**  
+
+* Teams continue to indicate that they need to work closely together. Most are working with high and sufficient levels of interdependence (slight deficiency reported by Flight Operations, Public Engagement and Senior Leadership Team).
+* Teams are functioning independently at relatively high levels.
+
+# 1. Performance and Adaptability
+
+## Performance on Key Indicators versus Expectations 
+`r tmt_name` members rated the performance of the organization on each indicator in reference to expectations. The scatter plot displays performance as well as relative importance information.  
+
+- Upper right: Performing well in areas of greater importance
+- Upper left: Performing well in areas of lesser importance
+- Lower right: Performing below a satisfactory level in areas of greater importance 
+- Lower left: Performing below a satisfactory level in areas of lesser importance
+
+```{r echo=FALSE, fig.align="center", fig.height=12, fig.width=10, message=FALSE, warning=FALSE, results='show'}
+# plot performance as an indicator of success
+
+importance <- t1_survey %>%
+  select(starts_with("PI_"), -ends_with("TEXT")) %>%
+  mutate_all(as.numeric) %>% 
+  summarise_all(mean, na.rm = TRUE) %>%
+  gather() %>%
+  transmute(
+    key=as.factor(gsub("PI_", "", key)),
+    importance = round(value)/100) %>%
+  mutate(key = fct_inseq(key))
+
+# calculate the average performance score for each variable
+performance <- t1_survey %>%
+  select(starts_with("Perf_")) %>%
+  rename_all(funs(paste("perf_",seq(1,11,1)))) %>%
+  mutate_all(funs(recode(., `1`=NaN, `2`=NaN, `3`=1, `4`=2, `5`=3, `6`=4)))  %>%
+  summarise_all(mean, na.rm = TRUE) %>%
+  gather() %>%
+  transmute(
+    key=as.factor(gsub("perf_ ", "", key)),
+    performance = value) %>%
+  mutate(key = fct_inseq(key))
+
+# join importance scores with performance scores
+perform <- importance %>%
+  left_join(performance, by="key") %>%
+  mutate(
+    key = fct_recode(c(
+        "PI_1"="Patient Benefit",
+                  "PI_2"="Growth",
+                  "PI_3"="Return on Investment in Fundraising",
+                  "PI_4"="Return on Investement in Retail/Commercial",
+                  "PI_5"="Employee Development",
+                  "PI_6"="Cost Reduction/Resource Efficiency",
+                  "PI_7"="Supply Chain Management",
+                  "PI_8"="Innovation",
+                  "PI_9"="Stewardship/Environmental Sustainability",
+                  "PI_10"="Safety/Compliance",
+                  "PI_11"="Community Engagement"))) 
+# plot performance vs importance
+# geom_text_repel used to avoid overlapping labels
+perform_plot1<- ggplot(data=perform, aes(x=importance, y=performance, ymin=1, ymax=4, xmin=0))+
+  geom_jitter(height = .5, width = .5, shape= 21, size=5, fill="deepskyblue4",color = "black") +
+  geom_text_repel(aes(x = importance, y = performance, label = key)) +
+  geom_vline(xintercept = mean(perform$importance), linetype="solid", color = "red", size=1.5, alpha=0.25) +
+  geom_hline(yintercept = 3, linetype="solid", color = "red", size=1.5, alpha=0.25) +
+  scale_y_discrete(limits=1:4, labels = c("Strongly Disagree", "Disagree", "Agree", "Strongly Agree")) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(title = NULL, 
+       subtitle = NULL,
+       x = "Relative Importance (Percentages)", 
+       y = "Performance Exceeds Expectations")
+
+perform %<>% 
+  mutate(time = 1)
+
+# calculate the average importance score for each variable
+t2_importance <- t2_survey %>%
+  select(starts_with("PI_"), -ends_with("TEXT")) %>%
+  mutate_all(as.numeric) %>% 
+ summarise_all(mean, na.rm = TRUE) %>%
+  gather() %>%
+  transmute(
+    key=as.factor(gsub("PI_", "", key)),
+    importance = round(value)/100) %>%
+  mutate(key = fct_inseq(key))
+
+# calculate the average performance score for each variable
+t2_performance <- t2_survey %>%
+  select(starts_with("Perf_")) %>%
+  rename_all(funs(paste("perf_",seq(1,11,1)))) %>%
+  mutate_all(funs(as.numeric)) %>% 
+  mutate_all(funs(recode(., `1`=NaN, `2`=NaN, `3`=1, `4`=2, `5`=3, `6`=4)))  %>%
+  summarise_all(mean, na.rm = TRUE) %>%
+  gather() %>%
+  transmute(
+    key=as.factor(gsub("perf_ ", "", key)),
+    performance = value) %>%
+  mutate(key = fct_inseq(key))
+
+# join importance scores with performance scores
+t2_perform <- t2_importance %>%
+  left_join(t2_performance, by="key") %>%
+  mutate(
+    key = fct_recode(c(
+                  "PI_1"="Patient Benefit",
+                  "PI_2"="Growth",
+                  "PI_3"="Return on Investment in Fundraising",
+                  "PI_4"="Return on Investement in Retail/Commercial",
+                  "PI_5"="Employee Development",
+                  "PI_6"="Cost Reduction/Resource Efficiency",
+                  "PI_7"="Supply Chain Management",
+                  "PI_8"="Innovation",
+                  "PI_9"="Stewardship/Environmental Sustainability",
+                  "PI_10"="Safety/Compliance",
+                  "PI_11"="Community Engagement")),
+    time = 2)
+
+
+# plot performance vs importance
+# geom_text_repel used to avoid overlapping labels
+perform_plot2<- ggplot(data=t2_perform, aes(x= importance, y=performance, ymin=1, ymax=4, xmin=0))+
+  geom_point(size=5, color="deepskyblue4") +
+  geom_text_repel(aes(x = importance, y = performance, label = key)) +
+  geom_vline(xintercept = mean(t2_perform$importance), linetype="solid", color = "red", size=1.5, alpha=0.25) +
+  geom_hline(yintercept = 3, linetype="solid", color = "red", size=1.5, alpha=0.25) +
+  scale_y_discrete(limits=1:4, labels = c("Strongly Disagree", "Disagree", "Agree", "Strongly Agree")) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(title = NULL, 
+       subtitle = NULL,
+       x = "Relative Importance (Percentages)", 
+       y = "Performance Exceeds Expectations")
+
+perform %>% bind_rows(t2_perform) %>% 
+  ggplot(aes(x= importance, y=performance, ymin=1, ymax=4, xmin=0))+
+  geom_jitter(size=5,shape =21, fill="deepskyblue4",color = "black") +
+  geom_text_repel(aes(x = importance, y = performance, label = key)) +
+  geom_vline(xintercept = mean(t2_perform$importance), linetype="solid", color = "red", size=1.5, alpha=0.25) +
+  geom_hline(yintercept = 3, linetype="solid", color = "red", size=1.5, alpha=0.25) +
+  scale_y_discrete(limits=1:4, labels = c("Strongly Disagree", "Disagree", "Agree", "Strongly Agree")) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(title = NULL, 
+       subtitle = NULL,
+       x = "Relative Importance (Percentages)", 
+       y = "Performance Exceeds Expectations")  +
+  #theme(
+ #   axis.title.x = element_text(vjust = -2)
+ # ) + 
+  facet_wrap(~time, nrow = 2, labeller = as_labeller(c(`1` = "Time 1",
+                                             `2` = "Time 2")))
+```
+
+# 2. Strategic Readiness
+An organization's performance and agility in response to changing business environments depends on its strategic readiness. 
+
+The readiness of organizations to implement their strategy is contingent on the following key strategic conditions:
+
+### Clarity 
+
+A clear strategic vision provides the organization with direction into an uncertain future. If clarity is low, leaders may become overwhelmed or distracted by tasks that are irrelevant or even counterproductive to meeting strategic goals.
+
+### Appropriateness  
+
+Leaders who agree with the goals and objectives of the organization's strategy have a greater sense of ownership and are more motivated to implement the strategy. If leaders resist, this resistance should be investigated to inform strategic thinking and planning.
+
+### Commitment  
+
+Challenges commonly arise with any large scale strategic initiative. The effort leaders invest in implementing the strategy is a strong predictor of implementation success. Leaders who are not committed to their role in the strategy may not persist, and if they falter, those who report to them are likely to as well.
+
+## Overall Strategic Readiness
+
+This graph displays overall views in the organization regarding strategic clarity, appropriateness, and commitment. Scores above 3 indicate that respondents generally agree that the strategy is clear, in the best interest of the organization, and that they are committed to their role in executing the strategy. 
+
+```{r echo=FALSE, fig.align="center", fig.height=5, fig.width=10, message=FALSE, warning=FALSE, results='show'}
+# plot the overall agreement scores
+cac_1<- t1_scores %>%
+  select(clarity, correct, commit) %>%
+  gather() %>%
+  mutate(
+    key = recode_factor(key,
+                        "clarity"="Clarity",
+                        "correct"="Appropriateness",
+                        "commit"="Commitment"),
+    time = "1")
+t2_scores %>%
+  select(ID,clarity, correct, commit) %>%
+  distinct_all() %>% 
+  select(-ID) %>% 
+  gather() %>%
+  mutate(
+    key = recode_factor(key,
+                        "clarity"="Clarity",
+                        "correct"="Appropriateness",
+                        "commit"="Commitment"),
+  time = "2") %>%
+  bind_rows(cac_1) %>% 
+  ggplot(aes(x=factor(key), y=value, fill=key)) + 
+    stat_summary(fun.y="mean", geom="bar", color="black", width = 0.5) +
+    stat_summary(aes(label=round(..y..,1)), fun.y="mean", geom="text", vjust = 2,size = 6) +
+    geom_hline(yintercept = 3, linetype="solid", color = "red", size=1.5, alpha=0.25) +    
+    scale_y_continuous(breaks = c(1:4), labels = c("Strongly Disagree", "Disagree", "Agree", "Strongly Agree")) +
+    coord_cartesian(ylim = c(1, 4)) +
+    guides(fill=FALSE) +
+    labs(title = NULL, 
+         subtitle = NULL,
+         x = NULL, 
+         y = NULL) +
+    scale_fill_brewer(palette="Set2") + 
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size  =12),
+    legend.text = element_text(size = 12)
+  )  +
+  facet_wrap(~time,labeller = labeller(time = c(`1` = "Time 1",`2` = "Time 2")))
+```
+
+This graph provides a closer look at the variability in responses regarding strategic clarity, appropriateness, and commitment. This information provides a more nuanced view of the strength of opinions held and the level of agreement among members of the organization.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='show', fig.align="center", fig.height=6, fig.width=10}
+# plot the number of people that agree/disagree
+a_g_1<- t1_scores %>%
+  select(clarity, correct, commit) %>%
+  melt() %>%
+  mutate(
+    value = ordered(round(value), 
+                    levels=c(1, 2, 3, 4), 
+                    labels=c("Strongly\nDisagree", "Disagree", "Agree" ,"Strongly\nAgree")),
+    variable = recode_factor(variable,
+                             "clarity"="Clarity",
+                             "correct"="Appropriateness",
+                             "commit"="Commitment")) %>%
+  na.omit() %>% 
+  mutate(time = 1)
+
+  t2_scores %>% 
+    select(ID,clarity, correct, commit)%>%
+    distinct_all() %>% 
+    select(-ID) %>% 
+    melt() %>% 
+    mutate(
+    value = ordered(round(value), 
+                    levels=c(1, 2, 3, 4), 
+                    labels=c("Strongly\nDisagree", "Disagree", "Agree" ,"Strongly\nAgree")),
+    variable = recode_factor(variable,
+                             "clarity"="Clarity",
+                             "correct"="Appropriateness",
+                             "commit"="Commitment")
+    ) %>%
+    na.omit() %>% 
+    mutate(time = 2) %>% 
+    bind_rows(a_g_1) %>% 
+  ggplot(aes(x=value, fill=variable)) +
+    geom_bar(color="black", width=0.75) +
+    scale_y_continuous(NULL, breaks = NULL) +
+    scale_x_discrete(drop=FALSE) +
+    guides(fill=FALSE) +
+    facet_grid(cols = vars(variable)) +
+    labs(title = NULL,
+         subtitle = NULL,
+         x = NULL, 
+         y = NULL) +
+    theme(legend.position="right",
+          legend.title=element_blank()) +
+    scale_fill_brewer(palette="Set2") + 
+   facet_grid(time~variable,labeller = labeller(time = (c(`1` = "Time 1",
+                                             `2` = "Time 2"))))
+```
+
+## Group-Level Breakdown of Strategic Readiness
+
+The information in this stacked bar chart provides a sense of each group's current level of strategic readiness. 
+
+Each section of the bar depicts the group's average score for clarity, appropriateness, and commitment. Together these three elements make up the level of strategic readiness within each group. 
+
+As before, scores above 3 for each section of the bar indicate that respondents generally agree that the strategy is clear, in the best interest of the organization, and that they are committed to their role in executing the strategy.
+
+The information in this chart may be used to identify where groups stand in their current readiness and which factors need more attention to improve their readiness to implement the organization's strategy. 
+
+The following team name abbreviations were used within this report:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+kable(team_names, col.names = NULL) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "center", font_size = 12)
+```
+
+```{r eval=TRUE, echo=FALSE, message=FALSE, warning=FALSE, results='show', fig.align="center", fig.height=5, fig.width=8}
+t_ccc_1<- t1_teams %>%
+  left_join(t1_scores, by=c("name" ="ID")) %>%
+  select(team, clarity, correct, commit) %>%
+  group_by(team) %>%
+  summarise_all('mean', na.rm=TRUE) %>%
+  melt("team") %>%
+  mutate(
+    variable = recode_factor(variable,
+                             "clarity"="Clarity",
+                             "correct"="Appropriateness",
+                             "commit"="Commitment")) %>%
+  na.omit() %>%
+  mutate(time = 1)
+
+t2_teams %>% 
+  full_join(t2_scores %>% mutate(ID = as.double(ID)), by=c("ID")) %>% 
+  select(team, clarity, correct, commit) %>% 
+  group_by(team) %>% 
+  summarise_all('mean',na.rm = TRUE) %>% 
+  melt("team") %>% 
+  mutate(
+    variable = recode_factor(variable,
+                             "clarity"="Clarity",
+                             "correct"="Appropriateness",
+                             "commit"="Commitment")) %>% 
+  na.omit() %>% 
+  mutate(time = 2) %>% 
+  bind_rows(t_ccc_1 %>% select(team, variable, value, time)) %>%
+  left_join(team_names,by=c("team" = "full"))  %>%
+  mutate(team = factor(short,levels = c("F&I","Flight Ops","PS","PE","People","SLT","Support","HS","IG"))) %>%  
+  ggplot(aes(x=team, y=value, fill=variable, label = round(value, 1))) +
+    geom_bar(stat='identity', color="black", width=0.7) +
+    geom_text(size = 3, position = position_stack(vjust = 0.5)) +
+   geom_hline(yintercept = 9, linetype="solid", color = "red", size=1.5, alpha=0.25) +    
+    scale_y_continuous(breaks= pretty_breaks()) +
+    coord_cartesian(ylim = c(1, 12)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), 
+          legend.position="bottom",
+          legend.title=element_blank(), 
+          legend.text = element_text(margin = margin(r = 20, unit = "pt"))) +
+    labs(title = NULL, 
+         subtitle = NULL,
+         x = NULL, 
+         y = NULL,
+         fill = NULL) + 
+  scale_fill_brewer(palette="Set2") + 
+  facet_wrap(~time, labeller= labeller(time= (c(`1` = "Time 1", `2` = "Time 2"))), scales = "free_x")
+```
+
+## Strategic Alignment
+
+When members of an organization share the same priorities they are better able to align their efforts towards the pursuit of common goals. 
+
+Devon Air Ambulance employees were asked to rank the strategic goals of the organization in terms of their importance to the organization.
+
+This radar chart shows how the various teams within Devon Air Ambulance evaluated the importance of the different strategic goals as well as the degree to which teams within Devon Air Ambulance are aligned in terms of their perceptions of the importance of the organization's strategic goals. 
+
+The strategic goals for Devon Air Ambulance are represented on the perimeter of the circle. The average level of importance of that strategic goal to each team is represented by a point on the line corresponding to each goal. Alignment across teams is indicated by the degree to which the profile shapes of the different teams are similar as this indicates that they share similar conceptions of the importance of the various strategic goals pursued by Devon Air Ambulance. 
+
+You can further examine this plot by clicking on team names in the legend in order to isolate a specific team’s profile, or to compare the rankings provided by specific sets of teams. Hovering over a point will show the average ranking, the team the ranking belongs to (also denoted by color), and the strategic goal being ranked.
+
+The strategic goals included in this graphic are listed in the table below for your reference.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Strat_goals<- c("Patient Benefit","Organizational Culture","Fundraising","Diversity","Digital Skills","Efficiency","Net Zero")
+
+Strat_exp<- c("Continual improvement of patient benefit",
+"Develop high-performing supportive organisational culture",
+"Increase fundraising income",
+"Improve diversity of workforce",
+"Enhance digital skills across the board",
+"Increase efficiency",
+"Develop a plan for achieving net zero")
+
+strat_tbl<-cbind(Strat_goals,Strat_exp)
+
+strat_tbl %>%
+  as.tibble() %>%
+  rename('Strategic Goal' = 1,'Explanation' = 2) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "center", font_size = 12) %>%
+  column_spec(1,bold=T)
+```
+#### {.tabset}
+
+##### Time 1 
+
+```{r echo=FALSE, fig.align="center", fig.width=9, message=FALSE, warning=FALSE}
+library(paletteer)
+library(RColorBrewer)
+library(colorspace)
+
+color_palette<- c("#1500ff","#ff8c00","#fe0000","#008080","#016400","#EBE352","#BF24F3")
+colors_border= adjust_transparency(color_palette,1)
+colors_in= adjust_transparency(color_palette,.3)
+
+t1_radar.plot <- t1_survey %>%
+  select(ID,starts_with("stratrank"))%>%
+  mutate_at(vars(starts_with("stratrank")), ~ as.numeric(.)) %>%
+  left_join(t1_teams,by=c("ID" ="name")) %>% 
+  select(team,starts_with("stratrank")) %>%
+  group_by_at("team") %>%
+  summarise_at(vars(starts_with('stratrank')),funs(round(mean(., na.rm = TRUE),2))) %>%
+  na.omit() %>%
+  arrange(team)
+
+t2_radar.plot<- t2_survey %>% 
+  select(ExternalReference,starts_with("stratrank")) %>% 
+  mutate(ExternalReference = as.double(ExternalReference)) %>% 
+  mutate_at(vars(starts_with("stratrank")), ~ as.numeric(.)) %>%   left_join(t2_teams,by=c("ExternalReference"= "ID")) %>% 
+  select(team,starts_with("stratrank")) %>%
+  group_by_at("team") %>%
+  summarise_at(vars(starts_with('stratrank')),funs(round(mean(., na.rm = TRUE),2))) %>%
+  na.omit() %>%
+  arrange(team)
+
+
+fig1 <- plot_ly(
+    type = 'scatterpolar',
+    fill = 'toself',
+)
+
+for (i in seq_along(t1_radar.plot$team)) { 
+  
+  subs<- droplevels(subset(t1_radar.plot,team == t1_radar.plot$team[i]))
+ text1 <- with(subs, paste0('Team: ',t1_radar.plot$team[i],"<br>Strategic Goal: ",Strat_goals,"<br>Average Ranking: ",subs[,2:ncol(subs)]))
+  
+fig1 <- add_trace(fig1,
+    data = subs,
+    r = as.vector(unname(unlist(subs[,2:ncol(t1_radar.plot)]))),
+    theta = Strat_goals,
+    name = subs$team,
+     text = text1,
+  hoverinfo="text",
+  fillcolor = colors_in[i],
+  marker = list(color = colors_border[i])
+  ) 
+}
+
+fig1 <- fig1 %>%
+  plotly::layout(
+    polar = list(
+      radialaxis = list(
+        visible = T,
+        range = c(length(t1_radar.plot$team),1)
+      )
+    )
+  )
+
+fig1
+```
+
+##### Time 2
+
+```{r echo=FALSE, fig.align="center", fig.width=9, message=FALSE, warning=FALSE}
+fig2 <- plot_ly(
+    type = 'scatterpolar',
+    fill = 'toself',
+)
+
+for (i in seq_along(t2_radar.plot$team)) { 
+  
+  subs<- droplevels(subset(t2_radar.plot,team == t2_radar.plot$team[i]))
+ text1 <- with(subs, paste0('Team: ',t2_radar.plot$team[i],"<br>Strategic Goal: ",Strat_goals,"<br>Average Ranking: ",subs[,2:ncol(subs)]))
+  
+fig2 <- add_trace(fig2,
+    data = subs,
+    r = as.vector(unname(unlist(subs[,2:ncol(t2_radar.plot)]))),
+    theta = Strat_goals,
+    name = subs$team,
+     text = text1,
+  hoverinfo="text",
+  fillcolor = colors_in[i],
+  marker = list(color = colors_border[i])
+  ) 
+}
+
+fig2 <- fig2 %>%
+  plotly::layout(
+    polar = list(
+      radialaxis = list(
+        visible = T,
+        range = c(length(t2_radar.plot$team),1)
+      )
+    )
+  )
+
+fig2
+```
+
+## {.unlisted .unnumbered}
+
+## Shifts in Strategic Priorities Needed
+
+Members of the SLT were asked to indicate the degree to which DAA’s approach to achieving these strategic objectives needs to shift.
+
+The graph below provides a summary of their responses. Each section of the bar depicts the percentage of respondents who endorsed that response option for a given strategic priority.
+
+```{r echo=FALSE, fig.align="center", fig.height=8, fig.width=12, message=FALSE, warning=FALSE, results='show'}
+# calculate percentage agree/disagree for each agility variable
+agility <- t1_survey %>% 
+  select(starts_with("agil")) %>%
+  na.omit() %>%
+  gather(key = items, value = answer) %>% 
+  mutate(
+    answer = recode_factor(answer, 
+                           `4`="Strongly Agree", 
+                           `3`="Agree", 
+                           `2`="Disagree", 
+                           `1`="Strongly Disagree", 
+                           .ordered = TRUE),
+    items = recode(items,
+                   "agil_1"="Continual improvement\nof patient benefit",
+                   "agil_2"="Develop high-performing\nsupportive organisational culture",
+                   "agil_3"="Increase fundraising income",
+                   "agil_4"="Improve diversity of workforce",
+                   "agil_5"="Enhance digital skills\nacross the board",
+                   "agil_6"="Increase efficiency",
+                   "agil_7"="Develop a plan for\nachieving net zero")
+  ) %>%
+  group_by(items, answer) %>%
+  summarize(n = n()) %>%
+  ungroup() %>%
+  group_by(items) %>%
+  mutate(cumperc = cumsum(n)/sum(n)) %>%
+  ungroup()
+
+
+# plot percentage agree/disagree for each agility variable
+agil_1<- ggplot(data = agility, aes(x = items, y = n)) +
+  geom_col(aes(fill = answer), position = "fill", color="black") +
+  coord_flip() +
+  geom_label(aes(items, Inf,
+                 label = ifelse(answer == "Agree", scales::percent(cumperc), NA),
+                 hjust = 2,
+                 vjust = .5)) +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  scale_fill_brewer(palette="Set2") +
+  labs(title = NULL,
+       subtitle = NULL,
+       x = NULL, 
+       y = NULL) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text.y=element_text(size=14),
+        legend.position="bottom",
+        legend.title=element_blank(),
+        legend.text = element_text(margin = margin(r = 25, unit = "pt")))
+
+t2_agility <- t2_survey %>% 
+  select(starts_with("agil")) %>%
+  na.omit %>%
+  gather(key = items, value = answer) %>% 
+  mutate(
+    answer = recode_factor(answer, 
+                           `4`="Strongly Agree", 
+                           `3`="Agree", 
+                           `2`="Disagree", 
+                           `1`="Strongly Disagree", 
+                           .ordered = TRUE),
+    items = recode(items,
+         "agil_1"="Continual improvement\nof patient benefit",
+                   "agil_2"="Develop high-performing\nsupportive organisational culture",
+                   "agil_3"="Increase fundraising income",
+                   "agil_4"="Improve diversity of workforce",
+                   "agil_5"="Enhance digital skills\nacross the board",
+                   "agil_6"="Increase efficiency",
+                   "agil_7"="Develop a plan for\nachieving net zero")
+  ) %>%
+  group_by(items, answer) %>%
+  summarize(n = n()) %>%
+  ungroup() %>%
+  group_by(items) %>%
+  mutate(cumperc = cumsum(n)/sum(n)) %>%
+  ungroup()
+
+
+# plot percentage agree/disagree for each agility variable
+agil_2<- ggplot(data = t2_agility, aes(x = items, y = n)) +
+  geom_col(aes(fill = answer), position = "fill", color="black") +
+  coord_flip() +
+  geom_label(aes(items, Inf,
+                 label = ifelse(answer == "Agree", scales::percent(cumperc), NA),
+                 hjust = 2,
+                 vjust = .5)) +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  scale_fill_brewer(palette="Set2") +
+  labs(title = NULL,
+       subtitle = NULL,
+       x = NULL, 
+       y = NULL) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text.y=element_text(size=14),
+        legend.position="bottom",
+        legend.title=element_blank(),
+        legend.text = element_text(margin = margin(r = 25, unit = "pt")))
+
+plot_grid(agil_1,agil_2,nrow = 2,ncol =1,labels = c("Time 1","Time 2"))
+```
+
+## Strategy Implementation Comment Summary  
+
+Respondents were asked, “What are the biggest challenges you anticipate in DAA achieving its strategic objectives?”. Twenty-nine participants responded, and themes with exemplary quotes are presented here under each theme. The percent of responses that were classified into each theme is presented in parentheses. The full list of responses is provided in the Strategy Implementation section of the Appendix.  
+
+**Addressing Financial Issues Resulting from Increased Cost of Living (58%)**  
+
+-	Financial implications of the cost of living is a big concern.
+-	Cost of living crisis affecting peoples ability to donate and also soaring costs for the organisation.
+-	Income generation to finance patient care.
+-	Understanding the financial implications of our aspirations and getting a handle on where the money will be coming from.
+-	Although DAA has amazing support throughout Devon and surrounding areas, the cost of living crisis might impact on our funding. Getting the message right to our supporters why we are spending £'s on a new airbase/academy. Capital Appeal, what impact is this going to have on other income streams?  
+
+**Hiring, Developing, and Allocating the “Right” Personnel (20%)**  
+
+-	Getting the right people into new roles to help drive the strategy. Need to get the whole team onboard for the net zero plan as well. Many of the questions have focused on building digital skills but investment in new, modern CRM and digital systems is required to enable to achievement of the strategy (it is built in and been looked into so I feel there is sufficient movement in this sector)
+-	Hiring the right people to drive the organisation forward in a challenging recruitment market.
+-	Key skills within the organisation in order to deliver on the plans. It strikes me that there are some very qualified people who are stretched already and if this expansion is going to go ahead then we either need to upskill or expand skill across the organisation to ensure success.
+-	Getting the right people in and trained up for the new roles. Induction process is key to getting this right and making sure our employees are ready for anything
+
+**Promote Widespread Understanding and Buy-in of DAA’s Strategy (17%)**  
+
+-	Understanding the reasons behind the strategy
+-	The "Why's" need to be better communicated more effectively. Decisions are made so fast it is easy to forget to communicate what is happening and why.
+-	Staff backing the strategy
+-	Ensuring that the strategy is referred to often and that all business objectives align and feed into support the overall strategy.
+-	Engagement and buy in from the wider organisation is imperative
+
+## Changes to Strategy Implementation Comment Summary  
+
+Respondents were asked, “What do you think needs to change for the organization to be more effective in achieving its strategy?” Fifteen participants responded, and themes with exemplary quotes are presented here under each theme. The percent of responses that were classified into each theme is presented in parentheses. The full list of responses is provided in the Strategy Implementation section of the Appendix.  
+
+**Continue to Foster Wider Allocation of Resources to Improve Teams’ Effectiveness (47%)**  
+*Note this same issue was mentioned at Time 1 and the percentage of comments in this theme have increased.*  
+
+-	We are an ambitious group, to undertake all the of work identified at times it can feel under-resourced, however this is often a result of the group trying to do too much in one go.  A more structured approach to priorities across the group would be welcome, giving oversight and enabling us to clearly identify touch points between different departments on different objectives and projects.
+-	I'm not sure that the planning for the implementation of strategies/projects fully understands the extra resource required from other teams.
+-	DAA is recruiting additional resource to help achieve the strategy along with a new CRM system. Once all of these are in place my answers above will be very different.
+-	Constraint on resources.
+
+**Promote the Efficient use of Channels and Consistent Timing by which Teams Across DAA Communicate (20%)**  
+
+-	Communication to all levels of leadership needs to be consistent. Communication has been slow and sometimes gone missing as to the progress with the strategic plan.
+-	Departments work well together but are all busy and a way for even better communication on projects and priorities will help to increase effort, understanding and collaboration even further. 
+-	Delivering a extensive module of change brings confusion and cultural shifts. Communication is key and there is a need to improve communication at every level. From our IT systems, our digital market place and the structures around our development. Cascading intent, information as we outreach to staff, volunteers and supporters whilst also ensuring innovative methods of reaching the said audience. I believe our world is on the cusp of great change as it challenges its identity and we need to be at its forefront, including in areas of our thinking, technology and enterprise.
+
+
+
+# 3. Critical Connections  
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+t1_sc1_relations <- t1_survey %>%
+  select(ID,(starts_with("sc") & ends_with("_1"))) %>%
+  cbind(t1_survey$ID) %>% 
+  mutate_all(as.numeric) %>% 
+  pivot_longer(!ID) %>%
+  mutate(name = str_extract(name,"(?<=sc_)\\d{1,2}")) %>%
+  na.omit %>%
+  select(1:2) %>%
+  rename(from = 1,to = 2) %>% 
+  mutate(across(c(from:to),~ as.numeric(.x))) %>% 
+  filter(from!=to) %>%
+  left_join(t1_teams,by=c("to"="name")) %>%
+  filter(!is.na(team)) %>% 
+  select(from,to) %>% 
+  distinct(from,to)
+
+t1_sc2_relations<- t1_survey %>%
+  select(ID,(starts_with("sc") & ends_with("_2"))) %>%
+  cbind(t1_survey$ID) %>% 
+  mutate_all(as.numeric) %>% 
+  pivot_longer(!ID) %>%
+  mutate(name = str_extract(name,"(?<=sc_)\\d{1,2}")) %>%
+  na.omit %>%
+  select(1:2) %>%
+  rename(from = 1,to = 2) %>%
+  mutate(across(c(from:to),~ as.numeric(.x))) %>% 
+  filter(from!=to) %>%
+  left_join(t1_teams,by=c("to"="name")) %>%
+  filter(!is.na(team)) %>% 
+  select(from,to) %>% 
+  distinct(from,to)
+
+t1_actors <- t1_teams %>%
+  select(name, role,team) %>%
+  arrange(desc(role)) %>%
+  na.omit()
+
+t1_sc1_crit_relations<-t1_sc1_relations %>%
+  filter(from %in% t1_actors$name)%>%
+  filter(to %in% t1_actors$name)
+
+t1_sc2_crit_relations<-t1_sc2_relations %>%
+  filter(from %in% t1_actors$name)%>%
+  filter(to %in% t1_actors$name)
+
+t1_sc_actors<- t1_actors %>%
+  distinct(name)
+
+g.sc1.directed <- graph_from_data_frame(t1_sc1_crit_relations, vertices=t1_sc_actors, directed=TRUE)
+g.sc1.directed <- igraph:::simplify(g.sc1.directed, remove.loops = TRUE, remove.multiple = TRUE)
+g.sc1.reciporical <- as.undirected(g.sc1.directed, mode = c("mutual"))
+g.sc1.reciporical <- delete.vertices(g.sc1.reciporical, which(degree(g.sc1.reciporical)==0))
+g.sc1.undirected <- as.undirected(g.sc1.directed)
+
+# create SC2 graph and remove self-loops
+g.sc2.directed <- graph_from_data_frame(t1_sc2_crit_relations, vertices=t1_sc_actors, directed=TRUE)
+g.sc2.directed <- igraph:::simplify(g.sc2.directed, remove.loops = TRUE, remove.multiple = TRUE)
+g.sc2.reciporical <- as.undirected(g.sc2.directed, mode = c("mutual"))
+g.sc2.reciporical <- delete.vertices(g.sc2.reciporical, which(degree(g.sc2.reciporical)==0))
+g.sc2.undirected <- as.undirected(g.sc2.directed)
+
+##Graph
+perc_drop_func <- function(graph, min_perc = 0, max_perc = 50, stepz = 5){
+ indegree <- degree(graph, mode = "in")
+ N <- length(indegree)
+ percs <- seq(from = min_perc, to = max_perc, stepz)
+ top_n_toremove <- round(N*percs/100)
+ indegree <- sort(indegree, decreasing = T)
+
+ num_ties <- vector(length = length(percs))
+ perc_change <- vector(length = length(percs) - 1)
+
+for(i in 1:length(percs)){
+ if(i == 1){
+   num_ties[1] = sum(indegree)
+ }
+ else {
+   num_ties[i] <- sum(indegree[-c(1:top_n_toremove[i])])
+   perc_change[i] <- (num_ties[i] - num_ties[1])/ num_ties[1]
+ }
+}
+ output <- list(num_ties = num_ties, perc_change = perc_change, percs = percs)
+ datz_frame <- data.frame(percs = percs, perc_change = perc_change)
+ tot_output <- list(raw_output = output, datz_frame = datz_frame)
+ return(tot_output)
+}
+
+#Using the function and plotting things
+g.sc1.directed_toplot <- perc_drop_func(g.sc1.directed)
+g.sc2.directed_toplot <- perc_drop_func(g.sc2.directed)
+
+
+dat_to_plotsc1 <- g.sc1.directed_toplot$datz_frame
+dat_to_plotsc2 <- g.sc2.directed_toplot$datz_frame
+dat_to_plots_reference_line <- data.frame(percs = seq(from = 0, to =
+50, by = 10),
+                                         perc_change = seq(from = 0,
+to = .5, by = .10))
+
+dat_to_plotsc1$variable <- "Strategy Formulation"
+dat_to_plotsc2$variable <- "Strategy Implementation"
+dat_to_plots_reference_line$variable <- "Reference"
+
+comp_dat <- rbind(dat_to_plotsc1, dat_to_plotsc2, dat_to_plots_reference_line)
+comp_dat$variable <- as.factor(comp_dat$variable)
+comp_dat<-rename(comp_dat, Network = 3)
+```
+
+An organization’s ability to implement its strategy, achieve its performance objectives, and maintain agility in response to changing business environments is, in large part, determined by how its leaders and teams work together. We refer to these as the critical connections driving your organization’s success.  
+  
+## Network Vulnerabilities
+
+Robust communication networks regarding strategy formulation and implementation are critical among members of the upper levels of your organization.
+
+- **Strategy formulation** conversations address the competitive environment, the organization’s current strengths and weaknesses, and how the organization can leverage its resources and capabilities to create competitive advantage.  
+
+- **Strategy implementation** conversations address how your organization can motivate employees to execute strategy, allocate resources, and coordinate work to achieve strategic objectives.  
+
+When these networks are overly dependent on a small number of people, they are at greater risk for potential disruption (e.g., if key individuals in the organization leave there will be a substantial drop in connectivity as well as potential bottlenecks that might be gatekeepers slowing the work of too many others). This chart shows the incremental drop in network connectivity when the most central members are removed.
+
+- Red line - A proportionate drop in network connectivity based on the number of people removed from the network (baseline).
+
+- Green line - Actual loss in strategy formulation connections (e.g., when the top 10% connected people are removed, the number of relationships drops by a disproportionate 19.2%).
+
+- Blue line - Actual loss in strategy implementation connections (e.g., when the top 10% connected people are removed, the number of relationships drops by a disproportionate 19.7%).
+
+
+#### {.tabset}
+
+##### Time 1 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='show', fig.align="center", fig.height=6, fig.width=9}
+# create SC1 graph and remove self-loops
+
+t1_sc1_graph<-ggplot(comp_dat, aes(x = percs, y = abs(perc_change), colour = Network, group = 1, text = paste0("Percentage of Ties Removed: ",percs,"%", "<br>Percent Change: ", round(abs(perc_change*100),1),"%", "<br>Network: ",Network))) +
+        theme_bw() +
+        theme(legend.title = element_blank()) +
+        geom_line() +
+        geom_point() +
+        ylim(0, 1) +
+        ylab("% Drop in Connectivity") +
+        xlab("% of Individuals Removed")+
+        scale_y_continuous(breaks = c(0.00,0.25,0.50,0.75,1.00),label = c("0","25","50","75","100"))
+ggplotly(t1_sc1_graph, tooltip = "text")
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+t2_sc_relations <- t2_survey %>%
+  select(ExternalReference,starts_with("sc")) %>% 
+  pivot_longer(!ExternalReference) %>%
+  cSplit("value") %>% 
+  transmute(
+    from = ExternalReference,
+    to = str_extract(name,"\\d{1,2}"),
+    sc1 = case_when(value_1 == 1 ~ "sc1"),
+    sc2 = case_when(value_1 == 2 ~ "sc2",
+                    value_2 == 2 ~ "sc2")
+  )
+
+t2_sc1_relations<- t2_sc_relations %>% 
+  na.omit("sc1") %>%
+  select(from,to)%>%
+  mutate(from = as.double(from)) %>% 
+  left_join(t2_teams,by=c("from"="ID")) %>%
+  filter(!is.na(team)) %>% 
+  distinct(from,to)
+
+t2_sc2_relations<- t2_sc_relations %>% 
+  na.omit("sc2") %>% 
+  select(from, to) %>%
+  mutate(from = as.double(from)) %>% 
+  left_join(t2_teams,by=c("from"="ID")) %>%
+  filter(!is.na(team)) %>% 
+  distinct(from,to)
+
+t2_actors <- t2_teams %>%
+  select(ID, role,team) %>%
+  arrange(desc(role)) %>%
+  na.omit()
+
+t2_sc1_crit_relations<-t2_sc1_relations %>%
+  filter(from %in% t2_actors$ID)%>%
+  filter(to %in% t2_actors$ID)
+
+t2_sc2_crit_relations<-t2_sc2_relations %>%
+  filter(from %in% t2_actors$ID)%>%
+  filter(to %in% t2_actors$ID)
+
+t2_sc_actors<- t2_actors %>%
+  distinct(ID)
+
+g.sc1.directed <- graph_from_data_frame(t2_sc1_crit_relations, vertices=t2_sc_actors, directed=TRUE)
+g.sc1.directed <- igraph:::simplify(g.sc1.directed, remove.loops = TRUE, remove.multiple = TRUE)
+g.sc1.reciporical <- as.undirected(g.sc1.directed, mode = c("mutual"))
+g.sc1.reciporical <- delete.vertices(g.sc1.reciporical, which(degree(g.sc1.reciporical)==0))
+g.sc1.undirected <- as.undirected(g.sc1.directed)
+
+# create SC2 graph and remove self-loops
+g.sc2.directed <- graph_from_data_frame(t2_sc2_crit_relations, vertices=t2_sc_actors, directed=TRUE)
+g.sc2.directed <- igraph:::simplify(g.sc2.directed, remove.loops = TRUE, remove.multiple = TRUE)
+g.sc2.reciporical <- as.undirected(g.sc2.directed, mode = c("mutual"))
+g.sc2.reciporical <- delete.vertices(g.sc2.reciporical, which(degree(g.sc2.reciporical)==0))
+g.sc2.undirected <- as.undirected(g.sc2.directed)
+
+##Graph
+perc_drop_func <- function(graph, min_perc = 0, max_perc = 50, stepz = 5){
+ indegree <- degree(graph, mode = "in")
+ N <- length(indegree)
+ percs <- seq(from = min_perc, to = max_perc, stepz)
+ top_n_toremove <- round(N*percs/100)
+ indegree <- sort(indegree, decreasing = T)
+
+ num_ties <- vector(length = length(percs))
+ perc_change <- vector(length = length(percs) - 1)
+
+for(i in 1:length(percs)){
+ if(i == 1){
+   num_ties[1] = sum(indegree)
+ }
+ else {
+   num_ties[i] <- sum(indegree[-c(1:top_n_toremove[i])])
+   perc_change[i] <- (num_ties[i] - num_ties[1])/ num_ties[1]
+ }
+}
+ output <- list(num_ties = num_ties, perc_change = perc_change, percs = percs)
+ datz_frame <- data.frame(percs = percs, perc_change = perc_change)
+ tot_output <- list(raw_output = output, datz_frame = datz_frame)
+ return(tot_output)
+}
+
+#Using the function and plotting things
+g.sc1.directed_toplot <- perc_drop_func(g.sc1.directed)
+g.sc2.directed_toplot <- perc_drop_func(g.sc2.directed)
+
+
+dat_to_plotsc1 <- g.sc1.directed_toplot$datz_frame
+dat_to_plotsc2 <- g.sc2.directed_toplot$datz_frame
+dat_to_plots_reference_line <- data.frame(percs = seq(from = 0, to =
+50, by = 10),
+                                         perc_change = seq(from = 0,
+to = .5, by = .10))
+
+dat_to_plotsc1$variable <- "Strategy Formulation"
+dat_to_plotsc2$variable <- "Strategy Implementation"
+dat_to_plots_reference_line$variable <- "Reference"
+
+comp_dat <- rbind(dat_to_plotsc1, dat_to_plotsc2, dat_to_plots_reference_line)
+comp_dat$variable <- as.factor(comp_dat$variable)
+comp_dat<-rename(comp_dat, Network = 3)
+```
+
+##### Time 2 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='show', fig.align="center", fig.height=6, fig.width=9}
+# create SC1 graph and remove self-loops
+
+t2_sc1_graph<-ggplot(comp_dat, aes(x = percs, y = abs(perc_change), colour = Network, group = 1, text = paste0("Percentage of Ties Removed: ",percs,"%", "<br>Percent Change: ", round(abs(perc_change*100),1),"%", "<br>Network: ",Network))) +
+        theme_bw() +
+        theme(legend.title = element_blank()) +
+        geom_line() +
+        geom_point() +
+        ylim(0, 1) +
+        ylab("% Drop in Connectivity") +
+        xlab("% of Individuals Removed")+
+        scale_y_continuous(breaks = c(0.00,0.25,0.50,0.75,1.00),label = c("0","25","50","75","100"))
+ggplotly(t2_sc1_graph, tooltip = "text")
+```
+
+## {.unlisted .unnumbered}
+
+## Level of Each Group's Engagement in Strategy Formulation
+```{r echo=FALSE, fig.align="center", fig.height=4, fig.width=12, message=FALSE, warning=FALSE}
+t1_incoming <- t1_sc1_relations %>%
+  select(to) %>%
+  left_join(t1_actors, by=c("to"="name")) %>%
+  count(team) %>%
+  na.omit() %>%
+  mutate(perc = round(n / nrow(t1_sc1_relations), 2),
+         time = 1, 
+         direction = "incoming",
+         pal = "gray85")
+
+t1_outgoing<- t1_sc1_relations %>%
+  select(from) %>%
+  mutate(from = as.double(from)) %>% 
+  left_join(t1_actors, by=c("from"="name")) %>%
+  count(team) %>%
+  na.omit() %>%
+  mutate(perc = round(n / nrow(t1_sc1_relations), 2),
+         time = 1, 
+         direction = "outgoing",
+         pal = "deepskyblue4")
+
+```
+
+```{r echo=FALSE, fig.align="center", fig.height=8, fig.width=12, message=FALSE, warning=FALSE,cache = F}
+
+t2_incoming <- t2_sc1_relations %>%
+  mutate(to = as.character(to)) %>%
+  select(to) %>%
+  mutate(to = as.double(to)) %>% 
+  left_join(t2_actors, by=c("to"="ID")) %>%
+  count(team) %>%
+  na.omit() %>%
+  mutate(perc = round(n / nrow(t2_sc1_relations), 2),
+         time = 2,
+         direction = "incoming",
+         pal = "gray85")
+
+
+time_labels = c(`1` = "Time 1",`2` = "Time 2")
+direction_labels<- c(`incoming` = "Engaged by Others in Conversations",`outgoing` = "Seeking Out Others to Engage in Conversations")
+
+t2_sc1_relations %>%
+  select(from) %>%
+  left_join(t2_actors, by=c("from"="ID")) %>%
+  count(team) %>% 
+  na.omit() %>% 
+  mutate(perc = round(n/nrow(t2_sc1_relations),2),
+         n = n,
+         time = 2,
+         direction = "outgoing",pal = "deepskyblue4")  %>% 
+  bind_rows(t1_incoming) %>% 
+  bind_rows(t1_outgoing) %>% 
+  bind_rows(t2_incoming) %>%
+  ungroup() %>% 
+  mutate(
+    direction = as.factor(direction),
+    time = as.factor(time)) %>%
+  na.omit %>% 
+    #short = reorder_within(short,perc, list(time,direction))) %>%
+  ggplot(aes(x= reorder_within(team,perc,list(time,direction)),y=perc), width=.75) +
+    geom_bar(aes(fill = direction),width = 1, stat = "identity",color="black") +
+    geom_text(aes(label = paste(perc * 100, "%", sep = "")), nudge_y = 0.035) +
+  scale_y_continuous(labels = scales::percent) +
+   scale_x_reordered() +
+  scale_fill_manual(values=c("gray85","deepskyblue4")) + 
+    coord_flip() +
+    guides(fill=FALSE) +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank()) +
+    labs(title = NULL,
+         x = NULL, 
+         y = NULL) + 
+  facet_wrap(time ~ direction,labeller = labeller(direction = direction_labels,time = time_labels),scales = "free_y")
+```
+
+## Level of Each Group's Engagement in Strategy Implementation
+
+```{r echo=FALSE, fig.align="center", fig.height=4, fig.width=12, message=FALSE, warning=FALSE,cache = F}
+
+# time 1 incoming sc2
+t1_sc2_incoming <- t1_sc2_relations %>%
+  select(to) %>%
+  mutate(to = as.double(to)) %>% 
+  left_join(t1_actors, by=c("to"="name")) %>%
+  add_count(team) %>%
+  summarise(team,perc = round(n/nrow(t1_sc2_relations),2)) %>%
+  distinct(team,.keep_all = T) %>%
+  transmute(
+    team,
+    perc,
+    time = 1, 
+    direction = "incoming",
+    pal = "gray85")
+
+# time 1 outgoing sc2
+t1_sc2_outgoing<- t1_sc2_relations %>%
+  select(from) %>%
+  mutate(from = as.double(from)) %>% 
+  left_join(t1_actors, by=c("from"="name")) %>%
+  add_count(team) %>% 
+  summarise(team,perc = round(n/nrow(t1_sc2_relations),2)) %>%
+  distinct(team,.keep_all = T) %>% 
+  transmute(
+    team,
+    perc,
+         time = 1,
+         direction = "outgoing",pal = "deepskyblue4")
+```
+
+```{r echo=FALSE, fig.align="center", fig.height=8, fig.width=12, message=FALSE, warning=FALSE, cache = FALSE}
+
+# time 2 incoming sc2
+
+sc2_incoming_t2 <- t2_sc2_relations %>%
+  select(to) %>%
+  mutate(to = as.double(to)) %>% 
+  left_join(t2_actors, by=c("to"="ID")) %>%
+  add_count(team) %>%
+  summarise(team,perc = round(n/nrow(t2_sc2_relations),2)) %>%
+  distinct(team,.keep_all = T) %>%
+  transmute(team, 
+            perc,
+            time = 2, 
+            direction = "incoming",
+            pal = "gray85") %>%
+  filter(!is.na(team))
+
+# time 2 outgoing sc2
+t2_sc2_relations %>%
+  select(from) %>%
+  left_join(t2_actors, by=c("from"="ID")) %>%
+  add_count(team) %>% 
+  summarise(team,perc = round(n/nrow(.),2)) %>%
+  distinct(team,.keep_all = T) %>%
+  transmute(
+         team,
+         perc,
+         time = 2,
+         direction = "outgoing",pal = "deepskyblue4")  %>% 
+  bind_rows(t1_sc2_incoming) %>% 
+  bind_rows(t1_sc2_outgoing) %>% 
+  bind_rows(sc2_incoming_t2) %>%
+  ungroup() %>% 
+  mutate(
+    direction = as.factor(direction),
+    time = as.factor(time)) %>%
+  na.omit %>% 
+    #short = reorder_within(short,perc, list(time,direction))) %>%
+  ggplot(aes(x= reorder_within(team,perc,list(time,direction)),y=perc), width=.75) +
+    geom_bar(aes(fill = direction),width = 1, stat = "identity",color="black") +
+    geom_text(aes(label = paste(perc * 100, "%", sep = "")), nudge_y = 0.035) +
+  scale_y_continuous(labels = scales::percent) +
+   scale_x_reordered() +
+  scale_fill_manual(values=c("gray85","deepskyblue4")) + 
+    coord_flip() +
+    guides(fill=FALSE) +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank()) +
+    labs(title = NULL,
+         x = NULL, 
+         y = NULL) + 
+   facet_wrap(time ~ direction,labeller = labeller(direction = direction_labels,time = time_labels),scales = "free_y")
+```
+
+
+```{r fig.align="center", fig.height=4, fig.width=6, message=FALSE, warning=FALSE, include=FALSE, results='show'}
+# get the unique vertices TMT is connected to 
+
+t1_execs<- t1_panel %>%filter(Role == "CEO" | Role == "ELT") %>% select(ID)
+
+
+t1_sc1_tmt_outgoing_vertices <- t1_sc1_relations %>%
+  left_join(t1_actors, by=c("from" = "name")) %>%
+  mutate_at(vars="from","to",as.numeric) %>% 
+  rename(from_team = team) %>%
+  left_join(t1_actors, by=c("to" = "name")) %>%
+  rename(to_team = team) %>%
+  filter(from_team == "Senior Leadership" & !(to %in% t1_execs)) %>%
+  select(to) %>%
+  na.omit() %>%
+  unique()
+
+# get all people and look up who is connected to TMT
+t1_sc1_tmt_outgoing <- t1_people %>%
+  mutate(tmt_connection = ifelse(name %in% as.vector(unlist(t1_sc1_tmt_outgoing_vertices)), "SLT Conversations", "Other Conversations"))
+
+# get the unique vertices TMT is connected to 
+t1_sc2_tmt_outgoing_vertices <- t1_sc2_relations %>%
+  mutate(to = as.numeric(as.character(to))) %>%
+  mutate(from = as.numeric(as.character(from))) %>% 
+  full_join(t1_actors, by=c("from" = "name")) %>%
+  rename(from_team = team) %>%
+  full_join(t1_actors, by=c("to" = "name")) %>%
+  rename(to_team = team) %>%
+  filter(from_team == "Senior Leadership" & !(to %in% t1_execs)) %>%
+  select(to) %>%
+  na.omit() %>%
+  unique()
+
+# get all people and look up who is connected to TMT
+t1_sc2_tmt_outgoing <- t1_people %>%
+  mutate(tmt_connection = ifelse(name %in% t1_sc2_tmt_outgoing_vertices$to, "SLT Conversations", "Other Conversations"))
+```
+
+```{r fig.align="center", fig.height=4, fig.width=6, message=FALSE, warning=FALSE, include=FALSE, results='show'}
+# get the unique vertices TMT is connected to 
+t2_execs<- t2_panel %>%filter(Role == "CEO" | Role == "ELT") %>% select(`External Data Reference`)
+
+t2_sc1_tmt_outgoing_vertices <- t2_sc1_relations %>%
+  mutate(to = as.double(to)) %>%
+  mutate(from = as.double(from)) %>% 
+  full_join(t2_teams, by=c("from" = "ID")) %>%
+  rename(from_team = team) %>%
+  full_join(t2_teams, by=c("to" = "ID")) %>%
+  rename(to_team = team) %>%
+  filter(from_team == "Senior Leadership" & !(to %in% t2_execs)) %>%
+  select(to) %>%
+  na.omit() %>%
+  unique()
+
+# get all people_2 and look up who is connected to TMT
+t2_sc1_tmt_outgoing <- t2_teams %>%
+  mutate(tmt_connection = ifelse(ID %in% t2_sc1_tmt_outgoing_vertices$to, "SLT Conversations", "Other Conversations")) 
+
+# get the unique vertices TMT is connected to 
+t2_sc2_tmt_outgoing_vertices <- t2_sc2_relations %>%
+mutate(to = as.double(to)) %>%
+  mutate(from = as.double(from)) %>% 
+  left_join(t2_teams, by=c("from" = "ID")) %>%
+  rename(from_team = team) %>%
+  left_join(t2_teams, by=c("to" = "ID")) %>%
+  rename(to_team = team) %>%
+  filter(from_team == "Senior Leadership" & !(to %in% t2_execs)) %>%
+  select(to) %>%
+  na.omit() %>%
+  unique()
+
+# get all people_2 and look up who is connected to TMT
+t2_sc2_tmt_outgoing <- t2_teams %>%
+  mutate(tmt_connection = ifelse(ID %in% t2_sc2_tmt_outgoing_vertices$to, "SLT Conversations", "Other Conversations")) 
+```
+
+## Composition of the `r tmt_name`'s Strategic Network  
+
+The information below provides insights into the types of people who are engaged in strategic conversations with members of the `r tmt_name`. The graph describes conversations that include an `r tmt_abbrev` member. This information can be used as a comparative baseline representing conversations that are happening throughout the organization. We provide information based on gender, organizational area, and tenure breakdown.
+
+### Gender
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='show', fig.align="center", fig.height=4, fig.width=12}
+
+sc1_tmt_gender <- t1_sc1_tmt_outgoing %>%
+  mutate(gender = recode_factor(gender,
+    "M" = "Male",
+    "F" = "Female")) %>%
+  count(gender, tmt_connection) %>%
+  group_by(tmt_connection) %>%
+  mutate(freq = n / sum(n)) %>%
+  filter(tmt_connection == "SLT Conversations") %>%
+  mutate(time = 1, network = "sc1")
+
+sc2_tmt_gender <- t1_sc2_tmt_outgoing %>%
+  mutate(
+    gender = recode_factor(gender, "M" = "Male", "F" = "Female")
+  )%>%
+  count(gender, tmt_connection) %>%
+  group_by(tmt_connection) %>%
+  mutate(freq = n / sum(n)) %>%
+  filter(tmt_connection == "SLT Conversations") %>%
+  mutate(time = 1, network = "sc2")
+```
+
+
+```{r echo=FALSE, fig.align="center", fig.height=8, fig.width=12, message=FALSE, warning=FALSE, results='show'}
+
+t2_sc1_tmt_gender <- t2_sc1_tmt_outgoing %>%
+  mutate(gender = recode_factor(gender,
+    "M" = "Male",
+    "F" = "Female")) %>%
+  count(gender, tmt_connection) %>%
+  group_by(tmt_connection) %>%
+  mutate(freq = n / sum(n)) %>%
+  filter(tmt_connection == "SLT Conversations") %>%
+  mutate(time = 2,network = "sc1")
+
+
+t2_sc2_tmt_outgoing %>%
+  mutate(
+    gender = recode_factor(gender, "M" = "Male", "F" = "Female")
+  )%>%
+  count(gender, tmt_connection) %>%
+  group_by(tmt_connection) %>%
+  mutate(freq = n / sum(n)) %>%
+  filter(tmt_connection == "SLT Conversations") %>%
+  mutate(time = 2,network = "sc2") %>% 
+  bind_rows(sc1_tmt_gender) %>% 
+  bind_rows(sc2_tmt_gender) %>%
+  bind_rows(t2_sc1_tmt_gender) %>% 
+  ggplot(aes(x= tmt_connection, y= freq, fill=gender)) +
+    geom_bar(stat="identity", color="black", width=0.5) +
+    scale_fill_manual(values = c("Male"= "steelblue","Female" = "lightcoral"), na.value = "gray75")+
+    geom_text(aes(label=ifelse(freq > .05, paste0(round(freq * 100 ,0), "%"),"")), position = position_stack(vjust = 0.5)) +
+    scale_y_continuous(labels = scales::percent) +
+    labs(title = NULL, 
+         x = NULL, 
+         y = NULL,
+         fill = NULL) + 
+  facet_wrap(time ~ network,labeller = labeller(time = time_labels,network = c("sc1" = "Strategy Formulation","sc2" = "Strategy Implementation")),scales = "free_y")  +
+  theme_tmt() 
+```
+
+### Team  
+
+A comparison of the columns in each table below suggests that the members of some groups are disproportionately engaged in conversations regarding strategy formulation and implementation with SLT members.
+
+#### Strategy Formulation Network
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='show', fig.align="center", fig.height=4,fig.width=12}
+sf_net<-t1_sc1_tmt_outgoing %>%
+  count(team, tmt_connection) %>%
+  spread(tmt_connection, value = n) %>%
+  mutate(
+    `SLT Conversations` = `SLT Conversations` / sum(`SLT Conversations`, na.rm=TRUE),
+    `SLT Conversations` = replace_na(`SLT Conversations`, 0)
+  ) %>%
+  arrange(desc(`SLT Conversations`)) %>%
+  transmute(
+    Team = team,
+    `SLT Conversations` = percent(`SLT Conversations`))%>%
+  na.omit()
+```
+
+```{r echo=FALSE, fig.align="center", fig.height=4, fig.width=12, message=FALSE, warning=FALSE, results='show'}
+t2_sf_net<-t2_sc1_tmt_outgoing %>%
+  count(team, tmt_connection) %>%
+  spread(tmt_connection, value = n) %>%
+  mutate(
+    `SLT Conversations` = `SLT Conversations` / sum(`SLT Conversations`, na.rm=TRUE),
+    `SLT Conversations` = replace_na(`SLT Conversations`, 0)
+  ) %>%
+  arrange(desc(`SLT Conversations`)) %>%
+  transmute(
+    Team = team,
+    `SLT Conversations` = percent(round(`SLT Conversations`,2)))%>%
+  na.omit()
+
+com_sf_net<- sf_net %>% 
+  full_join(t2_sf_net,by=c("Team"))
+
+#kable(com_sf_net, row.names = F,align = "cc",col.names=c("Team","Time 1", "Time 2")) %>%
+#  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = T, position = "float_left", font_size = 12) 
+
+datatable(com_sf_net,rownames = F, colnames = c("Team", "Time 1", "Time 2"),options = list(dom = 't'))
+```
+
+#### Strategy Implementation Network
+
+```{r fig.align="center", fig.height=4, fig.width=12, message=FALSE, warning=FALSE, include=FALSE, results='show'}
+si_net<-t1_sc2_tmt_outgoing %>%
+  count(team, tmt_connection) %>%
+  spread(tmt_connection, value = n) %>%
+  mutate(
+    `SLT Conversations` = `SLT Conversations` / sum(`SLT Conversations`, na.rm=TRUE),
+    `SLT Conversations` = replace_na(`SLT Conversations`, 0)
+  ) %>%
+  arrange(desc(`SLT Conversations`)) %>%
+  transmute(
+    Team = team,
+    `SLT Conversations` = percent(`SLT Conversations`)) %>%
+  na.omit()
+
+#kable(si_net, row.names = F,align = "cc") %>%
+#  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = T, position = "float_left", font_size = 12)
+
+#datatable(si_net)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#test to check percentages = 100
+t2_si_net<-t2_sc2_tmt_outgoing %>%
+  count(team, tmt_connection) %>%
+  spread(tmt_connection, value = n) %>%
+  mutate(
+    `SLT Conversations` = `SLT Conversations` / sum(`SLT Conversations`, na.rm=TRUE),
+    `SLT Conversations` = replace_na(`SLT Conversations`, 0)
+  ) %>%
+  arrange(desc(`SLT Conversations`)) %>%
+  transmute(Team = team,
+    `SLT Conversations` = percent(round(`SLT Conversations`,2))) %>%
+  na.omit() %>%
+  distinct(Team,.keep_all = T)
+
+com_si_net<- si_net %>% full_join(t2_si_net,by=c("Team")) 
+
+#com_si_net<- kable(com_si_net, row.names = F, align = "cc", col.names = c("Team","Time 1","Time 2")) %>%
+#  kable_styling(bootstrap_options = c("stripSLT", "hover", "condensSLT"), full_width = T, position = "left", font_size = 12) 
+
+datatable(com_si_net,rownames = F,colnames = c("Team","Time 1","Time 2"),options = list(dom = 't'))
+
+```
+### Tenure 
+
+#### Strategy Formulation
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+sf_net_tenure<- t1_sc1_tmt_outgoing %>%
+  mutate(ID = as.double(name)) %>% 
+  count(tenure_grp, tmt_connection) %>%
+  spread(tmt_connection, value = n) %>%
+  mutate(
+    `SLT Conversations` = `SLT Conversations` / sum(`SLT Conversations`, na.rm=TRUE),
+    `SLT Conversations` = replace_na(`SLT Conversations`, 0)
+  ) %>%
+  transmute(
+    Tenure = tenure_grp,
+    `SLT Conversations` = percent(`SLT Conversations`))%>%
+    filter(`SLT Conversations` > 0)%>%
+  na.omit()
+
+t2_sf_net_tenure<- t2_sc1_tmt_outgoing %>%
+  mutate(ID = as.double(ID)) %>% 
+  left_join(t2_people,by=c("ID")) %>%
+  count(tenure_grp, tmt_connection) %>%
+  spread(tmt_connection, value = n) %>%
+  mutate(
+    `SLT Conversations` = `SLT Conversations` / sum(`SLT Conversations`, na.rm=TRUE),
+    `SLT Conversations` = replace_na(`SLT Conversations`, 0)
+  ) %>%
+  transmute(
+    Tenure = tenure_grp,
+    `SLT Conversations` = percent(`SLT Conversations`))%>%
+    filter(`SLT Conversations` > 0)%>%
+  na.omit()
+
+com_sf_net_tenure<- sf_net_tenure %>%  
+  full_join(t2_sf_net_tenure,by=c("Tenure"))
+
+com_sf_net_tenure$Tenure %<>% fct_expand(c("30-35 years")) 
+com_sf_net_tenure<- complete(com_sf_net_tenure, Tenure, fill = list(`SLT Conversations.x`= "0%", `SLT Conversations.y`= "0%"))
+
+datatable(com_sf_net_tenure, rownames = F,colnames=c("Tenure","Time 1","Time 2"),options = list(dom = 't'))
+```
+
+#### Strategy Implementation
+
+```{r message=FALSE, warning=FALSE, include=FALSE, results='asis'}
+si_net_tenure<- t1_sc2_tmt_outgoing %>%
+  count(tenure_grp, tmt_connection) %>%
+  spread(tmt_connection, value = n) %>%
+  mutate(
+    `SLT Conversations` = `SLT Conversations` / sum(`SLT Conversations`, na.rm=TRUE),
+    `SLT Conversations` = replace_na(`SLT Conversations`, 0)
+  ) %>%
+  transmute(
+    Tenure = tenure_grp,
+    `SLT Conversations` = percent(`SLT Conversations`))%>%
+    filter(`SLT Conversations` > 0)%>%
+  na.omit()
+
+#kable(si_net_tenure, row.names = F,align = "cc") %>%
+#  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = T, position = "float_left", font_size = 12)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+t2_si_net_tenure<- t2_sc2_tmt_outgoing %>%
+  mutate(ID = as.double(ID)) %>% 
+  left_join(t2_people,by=c("ID")) %>%
+  count(tenure_grp, tmt_connection) %>%
+  spread(tmt_connection, value = n) %>%
+  mutate(
+    `SLT Conversations` = `SLT Conversations` / sum(`SLT Conversations`, na.rm=TRUE),
+    `SLT Conversations` = replace_na(`SLT Conversations`, 0)
+  ) %>%
+  transmute(
+    Tenure = tenure_grp,
+    `SLT Conversations` = percent(`SLT Conversations`))%>%
+    filter(`SLT Conversations` > 0)%>%
+  na.omit()
+
+comb_si_net<- si_net_tenure %>% 
+  full_join(t2_si_net_tenure,by=c("Tenure"))
+
+
+comb_si_net$Tenure %<>% fct_expand(c("5-10 years","25-30 years","30-35 years")) 
+comb_si_net<- complete(comb_si_net, Tenure, fill = list(`SLT Conversations.x`= "0%", `SLT Conversations.y`= "0%"))
+#kable(comb_si_net, row.names = F,align = "cc",col.names=c("Tenure","Time 1","Time 2")) %>%
+#  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = T, position = "float_left", font_size = 12) 
+
+#library(DT)
+
+datatable(comb_si_net,rownames = F, colnames = c("Tenure","Time 1", "Time 2"),options = list(dom = 't'))
+```
+
+
+# 4. Intergroup Collaboration
+
+Effective intergroup collaboration at the top of the organization is a critical driver of success.
+
+## Comparison of Required versus Actual Collaboration between Groups
+
+This network below depicts groups that need to work very closely (e.g., to jointly diagnose and solve problems or complete tasks) if the organization is to achieve its strategy. This information is drawn from the interdependence mapping activity, and shows where the greatest level of interdependence is required between groups for the strategy to be a success.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# determine cutoff value for displaying edges
+cutoff <- 0.5
+#cutoff <- 0.4
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# read CEO view data
+ceo_file<-here("..","devon_air_t1", "Data","Org x data IDs survey info template.xlsx")
+tt_sheet<- "Team to Team"
+ceo<- read_excel(ceo_file,sheet = tt_sheet)
+
+# clean up CEO data and filter to intensive relationships
+ceo_view <- ceo %>%
+  rename(team =1) %>%
+  melt('team') %>%
+  na.omit() %>%
+  transmute(
+    from = as.factor(team),
+    to = as.factor(variable),
+    relationship = value) %>% 
+  mutate_at(vars(from:to),funs(gsub("Team","",.)))  %>%
+  filter(relationship == "Intensive" | relationship == "Reciprocal")
+
+from_team_info <- t1_teams %>%
+  select(-c("Tenure","gender"))
+to_team_info <- t1_teams %>%
+  select(-c("Tenure","gender"))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, cache = FALSE}
+# create SC2 team edges
+sc2_team <- t1_sc2_relations %>%
+  mutate(to = as.numeric(to)) %>%
+  left_join(from_team_info, by=c("from"="name")) %>%
+  transmute(from, team_from = team, to) %>%
+  left_join(to_team_info, by=c("to"="name")) %>%
+  transmute(team_from = as.character(team_from), team_to = as.character(team), from, to) %>%
+  filter(team_from != team_to) %>%
+  na.omit()
+
+# sort from/to and combine into a new column
+sc2_team$team_combined <- apply(cbind(sc2_team$team_from, sc2_team$team_to), 1, function(x) paste(sort(x), collapse=":::"))
+sc2_team$id_combined <- apply(cbind(sc2_team$from, sc2_team$to), 1, function(x) paste(sort(x), collapse=":::"))
+
+# count the number of edges between teams
+team_edges <- sc2_team %>%
+  group_by(team_combined,id_combined) %>%
+  nest() %>%
+  mutate(filtered = map(data, ~ filter(., row_number()==1))) %>%
+  select(team_combined,id_combined,filtered) %>%
+  unnest()%>%
+  ungroup() %>%
+  count(team_combined) %>%
+  separate(team_combined, c("from", "to"), sep=":::") %>%
+  rename(weight = n)
+
+# count the number of people per team
+team_sizes <- t1_actors %>%
+  count(team)
+
+
+from_team_info <- t1_teams %>%
+  select(-c("Tenure","gender"))
+to_team_info <- t1_teams %>%
+  select(-c("Tenure","gender"))
+
+# calculate percentage of total possible edges
+team_to_team <- team_edges %>%
+  left_join(team_sizes, by=c("from" = "team")) %>%
+  rename(from_size = n) %>%
+  left_join(team_sizes, by=c("to" = "team")) %>%
+  rename(to_size = n) %>%
+  transmute(from, to, perc = weight / (from_size * to_size))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# determine cutoff value for displaying edges
+cutoff_2 <- 0.5
+#cutoff <- 0.4
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, cache = F}
+t2_ceo<- read_excel(here("Data","Survey Information Template 2023 - v 2 april 2023.xlsx"),sheet = "Team to Team")
+
+# clean up CEO data and filter to intensive relationships
+
+t2_ceo_view <- t2_ceo %>%
+  rename(team =1) %>%
+  melt('team') %>%
+  na.omit() %>%
+  transmute(
+    from = as.factor(team),
+    to = as.factor(variable),
+    relationship = value) %>% 
+  mutate_at(vars(from:to),funs(gsub("Team","",.)))  %>%
+  filter(relationship == "Intensive" | relationship == "Reciprocal") %>%
+  mutate_at(vars(from:to),funs(trimws(.,which="both")))
+
+from_team_info_2 <- t2_teams
+to_team_info_2 <- t2_teams
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# create SC2 team edges
+t2_from_team_info <- t2_teams %>%
+  select(-c("Tenure","gender"))
+t2_to_team_info <- t2_teams %>%
+  select(-c("Tenure","gender"))
+
+
+t2_sc2_team <- t2_sc2_relations %>%
+  mutate(to = as.double(to)) %>%
+  left_join(t2_from_team_info, by=c("from"="ID")) %>%
+  transmute(from, from_team = team, to) %>%
+  left_join(t2_to_team_info, by=c("to"="ID")) %>%
+  transmute(from_team = as.character(from_team), to_team = as.character(team), from, to) %>%
+  filter(from_team != to_team) %>%
+  na.omit()
+
+# sort from/to and combine into a new column
+t2_sc2_team$team_combined <- apply(cbind(t2_sc2_team$from_team, t2_sc2_team$to_team), 1, function(x) paste(sort(x), collapse=":::"))
+t2_sc2_team$id_combined <- apply(cbind(t2_sc2_team$from, t2_sc2_team$to), 1, function(x) paste(sort(x), collapse=":::"))
+
+# count the number of edges between teams
+t2_team_edges <- t2_sc2_team %>%
+  group_by(team_combined,id_combined) %>%
+  nest() %>%
+  mutate(filtered = map(data, ~ filter(., row_number()==1))) %>%
+  select(team_combined,id_combined,filtered) %>%
+  unnest()%>%
+  ungroup() %>%
+  count(team_combined) %>%
+  separate(team_combined, c("from", "to"), sep=":::") %>%
+  rename(weight = n)
+
+# count the number of people per team
+t2_team_sizes <- t2_actors %>%
+  count(team)
+
+# calculate percentage of total possible edges
+t2_team_to_team <- t2_team_edges %>%
+  left_join(team_sizes, by=c("from" = "team")) %>%
+  rename(from_size = n) %>%
+  left_join(team_sizes, by=c("to" = "team")) %>%
+  rename(to_size = n) %>%
+  transmute(from, to, perc = weight / (from_size * to_size)) 
+```
+
+#### {.tabset}
+
+##### Time 1
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='show', fig.align="center", fig.height=6, fig.width=10}
+# create shared plot
+
+# create CEO graph
+intense_g <- igraph:::graph_from_data_frame(d=ceo_view, directed=FALSE)
+# plot CEO graph
+
+intense_g_vis <- toVisNetworkData(intense_g)
+visNetwork(intense_g_vis$nodes, intense_g_vis$edges, main = "Reciprocal or Intensive Interdependence Required between Teams",width =  "100%")%>%
+    visOptions(highlightNearest = list(enabled = T, hover = T),
+              nodesIdSelection = T)
+```
+
+##### Time 2
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='show', fig.align="center", fig.height=6, fig.width=10, cache = F}
+# create shared plot
+
+# create CEO graph
+intense_g2 <- igraph:::graph_from_data_frame(d=t2_ceo_view, directed=FALSE)
+# plot CEO graph
+
+intense_g_vis2 <- toVisNetworkData(intense_g2)
+visNetwork(intense_g_vis2$nodes, intense_g_vis2$edges, main = "Reciprocal or Intensive Interdependence Required between Teams",width = "100%")%>%
+    visOptions(highlightNearest = list(enabled = T, hover = T),
+              nodesIdSelection = T) 
+```
+
+## {.unlisted .unnumbered}
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='show', fig.align="center", fig.height=6, fig.width=10}
+## create SC2 graph
+sc2_team_g <- igraph:::graph_from_data_frame(d=team_to_team, directed=FALSE)
+
+# copy graph and remove edges less than 60%
+sc2_team_g.copy <- delete.edges(sc2_team_g, which(E(sc2_team_g)$perc < cutoff))
+
+# set edge width
+E(sc2_team_g.copy)$width <- (E(sc2_team_g.copy)$perc + 1) ^ 2
+```
+
+#### {.tabset}
+
+##### Time 1 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+sc2_team_g.copy_netvis <- toVisNetworkData(sc2_team_g.copy)
+
+visNetwork(sc2_team_g.copy_netvis$nodes, sc2_team_g.copy_netvis$edges, main = "High Levels of Strategic Communication between Connected Teams",width = "100%") %>%
+  visOptions(highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = T)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='show', fig.align="center", fig.height=6, fig.width=10}
+## create SC2 graph
+t2_sc2_team_g <- igraph:::graph_from_data_frame(d=t2_team_to_team, directed=FALSE)
+
+# copy graph and remove edges less than 60%
+t2_sc2_team_g.copy <- delete.edges(t2_sc2_team_g, which(E(t2_sc2_team_g)$perc < cutoff))
+
+# set edge width
+E(t2_sc2_team_g.copy)$width <- (E(t2_sc2_team_g.copy)$perc + 1) ^ 2
+```
+
+
+##### Time 2 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+t2_sc2_team_g.copy_netvis <- toVisNetworkData(t2_sc2_team_g.copy)
+
+visNetwork(t2_sc2_team_g.copy_netvis$nodes, t2_sc2_team_g.copy_netvis$edges, main = "High Levels of Strategic Communication between Connected Teams",width = "100%") %>%
+  visOptions(highlightNearest = list(enabled = T, hover = T),
+             nodesIdSelection = T)
+```
+
+
+## {.unlisted .unnumbered}
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+team_to_team_gt.4 <- team_to_team %>%
+  filter(perc >= cutoff)
+
+#ignoring filter 
+test1 <- paste(team_to_team$from, team_to_team$to, sep = "_")
+test1b <- paste(team_to_team$to, team_to_team$from, sep = "_")
+test1_combined <- c(test1, test1b)
+test1_combined_tbl<-as_tibble(test1_combined)
+test1_combined_tbl_2<- test1_combined_tbl %>%
+  cSplit("value","_") %>%
+  mutate(test2 = paste0(value_1,"_",value_2))
+  
+ceo_view$from<- str_trim(ceo_view$from,side=c("both"))
+ceo_view$to<- str_trim(ceo_view$to,side=c("both"))
+ceo_view$relationship<-paste0(ceo_view$from,"_",ceo_view$to)
+test2 <- paste(ceo_view$from, ceo_view$to, sep = "_")
+
+no_contact <- ceo_view$relationship[!(ceo_view$relationship %in% test1_combined_tbl_2$test2)]
+
+# with filter
+test3 <- paste(team_to_team_gt.4$from, team_to_team_gt.4$to, sep = "_")
+test3b <- paste(team_to_team_gt.4$to, team_to_team_gt.4$from, sep = "_")
+
+test3_combo <- c(test3, test3b)
+test3_tbl<- as_tibble(test3_combo)
+test3_tbl2<- test3_tbl %>%
+  cSplit("value","_") %>%
+ # left_join(team_names,by=c("value_1"="full")) %>%
+ # left_join(team_names,by=c("value_2"="full")) %>%
+  mutate(test = paste0(value_1,"_",value_2))
+less_than_des_contact <- ceo_view$relationship[!(ceo_view$relationship %in% test3_tbl2$test)]
+
+no_contact <- str_replace(no_contact,pattern = "_", replacement = "-" )
+less_than_des_contact2 <- str_replace(less_than_des_contact,pattern = "_", replacement = "-" )
+
+tbz <- matrix(data = "", nrow = 2 , ncol = 3) 
+tbz[1,] <- less_than_des_contact2[1:3]
+tbz[2,] <- less_than_des_contact2[4:6]
+lo_contact <- rep(paste("<", cutoff, sep = " "), 2)
+rnmz <- c(lo_contact)
+rownames(tbz)<- rnmz
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+t2_team_to_team_gt.4 <- t2_team_to_team %>%
+  filter(perc >= cutoff_2)
+
+#ignoring filter 
+t2_test1 <- paste(t2_team_to_team$from, t2_team_to_team$to, sep = "_")
+t2_test1b <- paste(t2_team_to_team$to, t2_team_to_team$from, sep = "_")
+t2_test1_combined <- c(t2_test1, t2_test1b)
+  
+t2_ceo_view$from<- str_trim(t2_ceo_view$from,side=c("both"))
+t2_ceo_view$to<- str_trim(t2_ceo_view$to,side=c("both"))
+t2_ceo_view$relationship<-paste0(t2_ceo_view$from,"_",t2_ceo_view$to)
+t2_test2 <- paste(t2_ceo_view$from, t2_ceo_view$to, sep = "_")
+
+t2_no_contact <- t2_ceo_view$relationship[!(t2_ceo_view$relationship %in% t2_test1_combined)]
+
+# with filter
+t2_test3 <- paste(t2_team_to_team_gt.4$from, t2_team_to_team_gt.4$to, sep = "_")
+t2_test3b <- paste(t2_team_to_team_gt.4$to, t2_team_to_team_gt.4$from, sep = "_")
+t2_test3_combined <- c(t2_test3, t2_test3b)
+
+t2_ceo_view %<>% filter(from != "Helicopter Services" & from != "Income Generation") %>% 
+  filter(to != "Helicopter Services" & to != "Income Generation")
+
+t2_less_than_des_contact <- t2_ceo_view$relationship[!(t2_ceo_view$relationship %in% t2_test3_combined)]
+
+t2_no_contact <- str_replace(t2_no_contact,pattern = "_", replacement = "-" )
+t2_less_than_des_contact2 <- str_replace(t2_less_than_des_contact,pattern = "_", replacement = "-" )
+
+t2_tbz <- matrix(data = "", nrow = 3 , ncol = 3 ) 
+t2_tbz[1,] <- t2_less_than_des_contact2[1:3]
+t2_tbz[2,] <- t2_less_than_des_contact2[4:6]
+t2_tbz[3,1:3] <- t2_less_than_des_contact2[7:9]
+t2_lo_contact <- rep(paste("<", cutoff, sep = " "), 3)
+t2_rnmz <- c(t2_lo_contact)
+rownames(t2_tbz)<- t2_rnmz
+```
+
+
+### Time 1 
+
+We conducted a comparison of the degree to which the intensive strategic conversations occurring between groups are aligned with groups that need to work together intensively which revealed that there are `r length(less_than_des_contact2)` instances where groups need to work with intensive interdependence but are not strongly connected. 
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+options(knitr.kable.NA = '')
+
+kable(tbz, col.names = NULL) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "center", font_size = 12) %>% 
+   add_header_above(c("Time 1" = 4))
+```
+### Time 2
+
+We conducted a comparison of the degree to which the intensive strategic conversations occurring between groups are aligned with groups that need to work together intensively which revealed that there are `r length(t2_less_than_des_contact2)` instances where groups need to work with intensive interdependence but are not strongly connected. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+options(knitr.kable.NA = '')
+
+kable(t2_tbz, col.names = NULL) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "center", font_size = 12) %>%
+    add_header_above(c("Time 2" = 4))
+```
+
+## Priority Alignment throughout the Organization  
+
+The extent to which the priorities of different groups are in alignment can spur or derail collaboration between groups. 
+Members of each group provided ratings for all other groups using the following scale: 1 = Not at all, 2 = To a small extent, 3 = To a large extent.  
+
+Colors represent the perceived goal alignment.  
+
+To read this priority alignment “heat map” read across the rows.
+
+```{r echo=FALSE, fig.align="center", fig.height=8, fig.width=12, message=FALSE, warning=FALSE, results='show'}
+# plot providing rating vs. being rated
+ratings <- t1_survey %>%
+  select(ID, starts_with("FTPA"), starts_with("FT2PA")) %>%
+  melt("ID") %>%
+  na.omit() %>%
+  separate(variable, sep="_", into=c("team_num", "team_rated")) %>%
+  mutate(team_num = gsub("PA", "", team_num),
+         team_rated = as.factor(as.numeric(gsub("x","",team_rated))),
+         team_num = recode_factor(team_num, "FT" = "FT1")) %>%
+  left_join(t1_teams %>% select(name,team), by=c("ID"=c("name"))) %>%
+  mutate(providing_rating = team,
+         being_rated = recode_factor(team_rated,
+                              "1"  = "Senior Leadership",
+                              "2"  = "Income Generation",
+                              "3" = "Finance & Infrastructure",
+                              "4" = "Helicopter Services",
+                              "5" = "Patient Services",
+                              "6" = "People",
+                              "7" = "Support",
+                              "8" = "Board"
+                              )) %>%
+  arrange(providing_rating, being_rated) %>%
+  transmute(provided_being = paste(trimws(providing_rating), trimws(being_rated), sep = "-"), value) %>%
+  group_by(provided_being) %>%
+  mutate(value = as.numeric(value)) %>% 
+  summarise(mean_value = mean(value)) %>%
+  separate(provided_being, sep="-", into=c("providing_rating", "being_rated")) %>%
+  filter(providing_rating != being_rated) %>%
+  filter(providing_rating != "NA") %>%
+  filter(being_rated %in% providing_rating) %>%
+  mutate(time = 1)
+```
+
+
+```{r echo=FALSE, fig.align="center", fig.height=6, fig.width=12, message=FALSE, warning=FALSE, results='show'}
+# plot providing rating vs. being rated
+t2_ratings <- t2_survey %>%
+  select(ExternalReference, starts_with("FTPA"), starts_with("FT2PA")) %>%
+  melt("ExternalReference") %>%
+  na.omit() %>%
+  separate(variable, sep="_", into=c("team_num", "team_rated")) %>%
+  mutate(team_num = gsub("PA", "", team_num),
+         team_rated = as.factor(as.numeric(gsub("x","",team_rated))),
+         team_num = recode_factor(team_num, "FT" = "FT1")) %>%
+  mutate(ExternalReference = as.double(ExternalReference)) %>% 
+  left_join(t2_teams %>% select(ID,team), by=c("ExternalReference"="ID")) %>%
+  mutate(providing_rating = team,
+         being_rated = recode_factor(team_rated,
+                              "1"  = "Senior Leadership",
+                              "2"  = "Public Engagement",
+                              "3" = "Finance & Infrastructure",
+                              "4" = "Flight Operations",
+                              "5" = "Patient Services",
+                              "6" = "People",
+                              "7" = "Support",
+                              "8" = "Board"
+                              )) %>%
+  arrange(providing_rating, being_rated) %>%
+  transmute(provided_being = paste(trimws(providing_rating), trimws(being_rated), sep = "-"), value) %>%
+  group_by(provided_being) %>%
+  mutate(value = as.numeric(value)) %>% 
+  summarise(mean_value = mean(value)) %>%
+  separate(provided_being, sep="-", into=c("providing_rating", "being_rated")) %>%
+  filter(providing_rating != being_rated) %>%
+  filter(providing_rating != "NA")%>%
+  filter(being_rated %in% providing_rating) %>% 
+  mutate(time = 2)
+
+t2_ratings %>% 
+  bind_rows(ratings) %>% 
+  left_join(team_names,by=c("being_rated"="full")) %>%
+  left_join(team_names,by=c("providing_rating" = "full"))  %>%
+  transmute(being_rated = factor(short.x,levels = c("F&I","Flight Ops","PS","PE","People","SLT","Support","HS","IG")), providing_rating = factor(short.y,levels = c("F&I","Flight Ops","PS","PE","People","SLT","Support","HS","IG")),time, mean_value) %>% 
+ggplot(aes(x=being_rated, y=providing_rating, fill = mean_value)) + 
+  geom_raster() +
+  geom_text(aes(label = round(mean_value, 1))) +
+  scale_fill_distiller(palette = "RdYlGn", direction=1) +
+  labs(title = NULL, 
+       subtitle = NULL,
+       x = "Team Being Rated", 
+       y = "Team Providing Rating",
+       fill = "Rating") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  theme(text=element_text(size = 12)) + 
+  facet_wrap(~time, ncol = 2, scales = "free",labeller = labeller(time = c(`1` = "Time 1",`2` = "Time 2")))
+```
+
+We conducted a comparison of the extent to which there is perceived priority alignment between teams that need to work together reciprocally or intensively. This comparison revealed that there are no team pairings (see below) in which at least one group perceives their priorities to be misaligned.
+
+
+```{r misaligned, fig.height=12, fig.width=8, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+heat_cutoff <- 2
+ratings_lt2 <- ratings %>%
+  filter(mean_value < heat_cutoff)
+
+#Dealing with the undirected network
+ceo_dir1 <- paste(ceo_view$from, ceo_view$to, sep = "_")
+ceo_dir2 <- paste(ceo_view$to, ceo_view$from, sep = "_")
+ceo_tot <- c(ceo_dir1, ceo_dir2) 
+
+low_heat <- paste(ratings_lt2$providing_rating, ratings_lt2$being_rated, sep = "_")
+
+probs <- low_heat[low_heat %in% ceo_tot]
+
+probs_print <- str_replace(probs,pattern = "_", replacement = "-" )
+
+```
+
+```{r fig.height=12, fig.width=8, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+t2_heat_cutoff <- 2
+t2_ratings_lt2 <- ratings_lt2 %>%
+  filter(mean_value < t2_heat_cutoff)
+
+#Dealing with the undirected network
+t2_ceo_dir1 <- paste(t2_ceo_view$from, t2_ceo_view$to, sep = "_")
+t2_ceo_dir2 <- paste(t2_ceo_view$to, t2_ceo_view$from, sep = "_")
+t2_ceo_tot <- c(t2_ceo_dir1, t2_ceo_dir2) 
+
+t2_low_heat <- paste(t2_ratings_lt2$providing_rating, t2_ratings_lt2$being_rated, sep = "_")
+
+t2_probs <- t2_low_heat[t2_low_heat %in% t2_ceo_tot]
+
+t2_probs_print <- str_replace(t2_probs,pattern = "_", replacement = "-" )
+```
+
+```{r eval=FALSE, fig.align="center", fig.height=6, fig.width=8, message=FALSE, warning=FALSE, include=FALSE, results='show'}
+kable(list(probs_print,t2_probs_print), col.names = NULL) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F, position = "center", font_size = 12)
+```
+
+## Intergroup Trust and Competence Assessments 
+
+The extent that people outside of a group’s boundaries perceive members of that group as trustworthy and competent will impact a group’s ability to collaborate effectively with other groups.
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# get the "know" edges
+t1_know_relations <- t1_survey %>%
+  select(ID,starts_with("know"))
+
+colnames(t1_know_relations)[2:ncol(t1_know_relations)]<-t1_panel$ID
+  
+t1_know_relations %<>% 
+melt("ID") %>%
+  na.omit() %>%
+  transmute(from = ID, to = as.integer(variable)) %>%
+  filter(from != to) %>%
+  filter(from %in% t1_panel$ID) %>%
+  filter(to %in% t1_panel$ID) 
+
+# get the "integ" edges
+t1_integ_relations <- t1_survey %>%
+  select(ID,starts_with("integ"))
+
+colnames(t1_integ_relations)[2:ncol(t1_integ_relations)]<-t1_panel$ID
+
+t1_integ_relations %<>% 
+  melt("ID") %>%
+  na.omit() %>%
+  transmute(from = ID, to = as.integer(variable)) %>%
+  filter(from != to) %>%
+  filter(from %in% t1_panel$ID) %>%
+  filter(to %in% t1_panel$ID) 
+
+
+# get the "comp" edges
+t1_comp_relations <- t1_survey %>%
+  select(ID,starts_with("comp")) 
+
+colnames(t1_comp_relations)[2:ncol(t1_comp_relations)]<-t1_panel$ID
+
+t1_comp_relations %<>% 
+melt("ID") %>%
+  na.omit() %>%
+  transmute(from = ID, to = as.integer(variable)) %>%
+  filter(from != to) %>%
+  filter(from %in% t1_panel$ID) %>%
+  filter(to %in% t1_panel$ID) 
+
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# get the "know" edges
+t2_know_relations <- t2_survey %>%
+  select(ExternalReference,starts_with("know")) %>% 
+  cSplit("know") %>% 
+  pivot_longer(!1) %>% 
+  na.omit %>% 
+  transmute(from= ExternalReference, to = as.integer(value)) %>% 
+  filter(from != to)  %>%
+  filter(from %in% t2_panel$`External Data Reference`) %>%
+  filter(to %in% t2_panel$`External Data Reference`) 
+
+
+t2_comp_relations <- t2_survey %>%
+  select(ExternalReference,starts_with("comp")) %>% 
+  cSplit("comp") %>% 
+  pivot_longer(!1) %>% 
+  na.omit %>% 
+  transmute(from= ExternalReference, to = as.integer(value)) %>% 
+  filter(from != to)  %>%
+  filter(from %in% t2_panel$`External Data Reference`) %>%
+  filter(to %in% t2_panel$`External Data Reference`) 
+
+t2_integ_relations <- t2_survey %>%
+  select(ExternalReference,starts_with("integ")) %>% 
+  cSplit("integ") %>% 
+  pivot_longer(!1) %>% 
+  na.omit %>% 
+  transmute(from= ExternalReference, to = as.integer(value)) %>% 
+  filter(from != to)   %>%
+  filter(from %in% t2_panel$`External Data Reference`) %>%
+  filter(to %in% t2_panel$`External Data Reference`)
+
+```
+
+
+```{r warning=FALSE, message=FALSE, include=FALSE}
+t1_from_team_info<- t1_teams 
+t1_to_team_info<- t1_teams
+
+names(t1_from_team_info)[c(3,1)] <- c("role_from", "team_from")
+names(t1_to_team_info)[c(3,1)]<- c("role_to", "team_to")
+
+t1_from_team_info %<>% select(team_from,name)
+t1_to_team_info %<>% select(team_to,name)
+
+
+file.list<-list(competence = t1_comp_relations, integ = t1_integ_relations, knowledge = t1_know_relations)
+### in the lapply that is performed below. 
+network_results2<- lapply(file.list, function(x){
+
+#merge1 is just an intermediate step - not really good for anything, but is merged with the the info to get the 
+  #full dataframe called merge2
+  merge1 <- inner_join(x, t1_from_team_info, by = c("from" = "name"))
+  merge2 <- inner_join(merge1, t1_to_team_info, by = c("to" = "name"))
+
+#Calculate total ties
+Total<- merge2 %>%
+  na.omit() %>%
+  group_by(team_to) %>%
+  mutate(Total = n()) %>%
+  ungroup() %>%
+  complete(team_from,team_to, fill = list(Total = 0)) %>%
+  distinct(team_to, .keep_all=TRUE) %>%
+  select(team_to,Total)
+
+#Calculate internal ties and add total ties to df 
+Internal<- merge2 %>%
+  group_by(team_from,team_to) %>%
+  mutate(Internal = n()) %>%
+  ungroup() %>%
+  complete(team_from,team_to,fill = list(Internal = 0)) %>%
+  filter(team_from == team_to) %>%
+  distinct(team_to, .keep_all=TRUE) %>%
+  left_join(Total, by = "team_to")
+
+#Calulate external ties
+Output<- Internal %>%
+  mutate(External = Total - Internal) %>%
+  select(team_to,Total,Internal,External) %>%
+  rename(Team = team_to)
+
+  return(Output)
+})
+
+t1_Trust<- network_results2$integ
+t1_Know<- network_results2$knowledge
+t1_Comp<- network_results2$competence
+```
+
+
+```{r , message=FALSE, warning=FALSE, include=FALSE} 
+from_team_info_2<- t2_teams
+to_team_info_2<- t2_teams
+
+names(from_team_info_2)[c(3,1)] <- c("role_from", "team_from")
+names(to_team_info_2)[c(3,1)]<- c("role_to", "team_to")
+
+#from_team_info_2 %<>% mutate(ID = as.numeric(ID))
+to_team_info_2 %<>% mutate(ID = as.numeric(ID)) 
+
+file.list<-list(competence = t2_comp_relations, integ = t2_integ_relations, knowledge = t2_know_relations)
+### in the lapply that is performed below. 
+network_results2<- lapply(file.list, function(x){
+
+  
+  x %<>% mutate(from = as.double(from))
+#merge1 is just an intermediate step - not really good for anything, but is merged with the the info to get the 
+  #full dataframe called merge2
+  merge1 <- inner_join(x, from_team_info_2, by = c("from" = "ID"))
+  merge2 <- inner_join(merge1, to_team_info_2, by = c("to" = "ID"))
+
+#Calculate total ties
+Total<- merge2 %>%
+  na.omit() %>%
+  group_by(team_to) %>%
+  mutate(Total = n()) %>%
+  ungroup() %>%
+  complete(team_from,team_to, fill = list(Total = 0)) %>%
+  distinct(team_to, .keep_all=TRUE) %>%
+  select(team_to,Total)
+
+#Calculate internal ties and add total ties to df 
+Internal<- merge2 %>%
+  group_by(team_from,team_to) %>%
+  mutate(Internal = n()) %>%
+  ungroup() %>%
+  complete(team_from,team_to,fill = list(Internal = 0)) %>%
+  filter(team_from == team_to) %>%
+  distinct(team_to, .keep_all=TRUE) %>%
+  left_join(Total, by = "team_to")
+
+#Calulate external ties
+Output<- Internal %>%
+  mutate(External = Total - Internal) %>%
+  select(team_to,Total,Internal,External) %>%
+  rename(Team = team_to)
+
+  return(Output)
+})
+
+Trust_2<- network_results2$integ
+Know_2<- network_results2$knowledge
+Comp_2<- network_results2$competence
+```
+
+### Trust  
+
+The chart below presents the percentage of each group’s incoming connections that perceive members of the group as having motives, honesty, and character that they strongly trust.
+
+```{r fig.align="center", fig.height=6, fig.width=8, , echo=FALSE, include=FALSE}
+trust_external<- t1_Trust %>%
+  mutate(exttrust = (.$External / t1_Know$External)) %>%
+  rename(Team = 1)%>%
+  na.omit() %>% 
+  mutate(time = 1)
+```
+
+```{r External Trust, echo=FALSE, fig.align="center", fig.height=6, fig.width=8, message=FALSE, warning=FALSE, cache = F}
+Trust_2 %>%
+  mutate(exttrust = (Trust_2$External/ Know_2$External )) %>%
+  rename(Team = 1)%>%
+  na.omit() %>%
+  mutate(time = 2) %>% 
+  bind_rows(trust_external) %>% 
+  ggplot(aes(x=reorder_within(Team,exttrust,list(time)), y=exttrust, width=.75))+
+  geom_bar(width = 1, stat = "identity", color="black", fill="gray85")+
+  geom_text(aes(label = paste(sprintf("%.00f%%",exttrust * 100, "%", sep = ""))), nudge_y = 0.054) +
+  scale_x_reordered() + 
+  scale_y_continuous(labels = scales::percent)+
+  coord_flip()+
+  guides(fill=FALSE)+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+
+  labs(title = NULL,
+       subtitle = "External Trust Perceptions", 
+       x = NULL, 
+       y = NULL) + 
+    facet_wrap(~time, ncol = 1, scales = "free_y",labeller = labeller(time = c(`1` = "Time 1",`2` = "Time 2")))
+```
+
+### Competence  
+
+The chart below presents the percentage of each group’s incoming connections that perceive members of the group as having the technical skills, experience, and dependability needed to fulfill their work obligations.
+
+```{r echo=FALSE, fig.align="center", fig.height=6, fig.width=8, message=FALSE, warning=FALSE}
+t1_comp_external<- t1_Comp %>%
+mutate(percent_external = (.$External / t1_Know$Total))%>%
+  na.omit() %>% 
+  mutate(time = 1)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, cache = F}
+Comp_2 %>%
+mutate(percent_external = (Comp_2$External / Know_2$Total ))%>%
+  na.omit() %>% 
+  mutate(time = 2) %>%
+  rbind(t1_comp_external) %>% 
+  ggplot(aes(x=reorder_within(Team,percent_external,list(time)), y=percent_external, width=.75))+
+  geom_bar(width = 1, stat = "identity", color="black", fill="gray85")+
+  geom_text(aes(label = paste(sprintf("%.00f%%",percent_external * 100, "%", sep = ""))), nudge_y = 0.054) +
+  scale_x_reordered()+ 
+  scale_y_continuous(labels = scales::percent)+
+  coord_flip()+
+  guides(fill=FALSE)+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+
+  labs(title = NULL,
+       subtitle = "External Competence Perceptions", 
+       x = NULL, 
+       y = NULL) + 
+    facet_wrap(~time, ncol = 1, scales = "free_y",labeller = labeller(time = c(`1` = "Time 1",`2` = "Time 2")))
+```
+
+# 5. Functioning as a Team  
+
+The final section of this report provides a deeper look at the extent to which each team agrees that they need to and actually do work independently as as a team, are cohesive, collaborate and engage in joint decision-making, and produce three essential outcomes of leadership (direction, alignment, and commitment).
+
+## Gap Analysis of Needed and Actual Interdependence  
+
+A hallmark of a team is the interdependence of people who must work closely together to accomplish a goal or task.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='show', fig.align="center", fig.height=4, fig.width=6}
+t1_interdependence<- t1_scores %>%
+  select(ID,starts_with("i_taski"),starts_with("a_taski")) %>%
+  pivot_longer(!1) %>%
+  mutate(team_num = str_extract(name,"ft\\d{1}$")) %>% 
+  na.omit() %>% 
+  mutate(name = str_extract(name,"[a-z]{1}_taski")) %>% 
+  mutate(prefix = recode_factor(name,
+                             "i_taski"="Ideal",
+                             "a_taski"="Actual")) %>%
+  left_join(t1_teams,by=c("ID" = "name")) %>% 
+  left_join(team_names,by=c("team"="full")) %>% 
+  group_by(prefix, short) %>%
+  dplyr::summarize(mean = mean(value, na.rm=TRUE)) %>%
+  na.omit() %>% 
+  transmute(prefix,short,mean,time = 1)
+```
+
+```{r echo=FALSE, fig.align="center", fig.height=8, fig.width=10, message=FALSE, warning=FALSE, results='show'}
+
+t2_scores %>%
+  select(ID,starts_with("i_taski"),starts_with("a_taski")) %>%
+  pivot_longer(!1) %>%
+  mutate(team_num = str_extract(name,"ft\\d{1}$")) %>% 
+  na.omit() %>% 
+  mutate(name = str_extract(name,"[a-z]{1}_taski")) %>% 
+  mutate(prefix = recode_factor(name,
+                             "i_taski"="Ideal",
+                             "a_taski"="Actual")) %>%
+ mutate(ID = as.double(ID)) %>% 
+  left_join(t2_teams,by=c("ID")) %>% 
+  left_join(team_names,by=c("team"="full")) %>% 
+  group_by(prefix, short) %>%
+  dplyr::summarize(mean = mean(value, na.rm=TRUE)) %>%
+  na.omit() %>% 
+  transmute(prefix,short,mean,time = 2) %>%
+  bind_rows(t1_interdependence) %>%
+  ggplot(aes(x=factor(short), y=mean, color=prefix, fill=prefix)) + 
+    geom_bar(stat="identity",position = "identity",  alpha=0.3) +
+    coord_cartesian(ylim = c(1, 4)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), 
+          legend.position="bottom",
+          legend.title=element_blank(), 
+          legend.text = element_text(margin = margin(r = 20, unit = "pt"))) +
+    scale_fill_brewer(palette="Set1") +
+    labs(title = NULL,
+         subtitle = NULL, 
+         x = NULL, 
+         y = "Interdependence") + 
+  facet_wrap(~time ,scales = "free",labeller = labeller(time = c(`1` = "Time 1",`2` = "Time 2")))
+```
+
+### Within-Team Trust and Competence Assessments
+
+Trust and competence is also critical to effective collaboration within teams.
+
+Internal competence and trust perceptions have dropped, this is a trend across most teams when comparing time 1 and time 2. 
+
+## Trust
+The chart below presents the percentage of teammates who see each other as having motives, honesty, and character that they strongly trust. 
+
+```{r , echo=FALSE, fig.align="center", fig.height=6, fig.width=8, message=FALSE, warning=FALSE, results='show'}
+t1_intrateam<- t1_Trust %<>%
+  mutate(within_trust = (.$Internal / t1_Know$Internal))%>%
+  filter(Team != "Board") %>% 
+  mutate(time = 1) 
+```
+
+```{r internal trust, echo=FALSE, fig.align="center", fig.height=6, fig.width=8, message=FALSE, warning=FALSE, results='show'}
+Trust_2 %>%
+  mutate(within_trust = (Trust_2$Internal / Know_2$Internal))%>%
+  filter(Team != "Board") %>% 
+  mutate(time = 2) %>%
+  rbind(t1_intrateam) %>% 
+  ggplot(aes(x=reorder_within(Team, within_trust,list(time)), y=within_trust, width=.75))+
+  geom_bar(width = 1, stat = "identity", color="black", fill="deepskyblue4") +
+  geom_text(aes(label = paste(sprintf("%.00f%%",within_trust * 100, "%", sep = ""))), nudge_y = 0.054) +
+  scale_x_reordered() + 
+  scale_y_continuous(labels = scales::percent) +
+  coord_flip() +
+  guides(fill=FALSE) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  labs(title = NULL,
+       subtitle = "Internal Trust Perceptions", 
+       x = NULL, 
+       y = NULL) +
+  facet_wrap(~time, ncol = 1, scales = "free_y",labeller = labeller(time = c(`1` = "Time 1",`2` = "Time 2")))
+```
+
+### Competence  
+
+The chart below presents the percentage of teammates who see each other as having the technical skills, experience, and dependability needed to fulfill their work obligations. 
+
+```{r internal competence, echo=FALSE, fig.align="center", fig.height=6, fig.width=8, message=FALSE, warning=FALSE, results='show'}
+
+t1_Comp_internal<- t1_Comp %>%
+    mutate(percent_within = (.$Internal)/(t1_Know$Internal)) %>%
+  filter(Team != "Board") %>% 
+  mutate(time = 1)
+
+Comp_2 %>% 
+  mutate(percent_within = (Comp_2$Internal)/(Know_2$Internal)) %>%
+  filter(Team != "Board") %>% 
+  mutate(time=2) %>% 
+  bind_rows(t1_Comp_internal) %>% 
+    ggplot(aes(x=reorder_within(Team, percent_within,time),y=percent_within, width=.75))+
+  geom_bar(width = 1, stat = "identity", color="black",fill = "deepskyblue4") +
+  geom_text(aes(label = paste(sprintf("%.00f%%",percent_within * 100, "%", sep = ""))), nudge_y = 0.054) +
+  scale_y_continuous(labels = scales::percent) +
+  coord_flip() +
+  scale_x_reordered() +
+  guides(fill=FALSE) +
+  scale_fill_identity() + 
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  labs(title = NULL,
+       subtitle = "Internal Competence Perceptions", 
+       x = NULL, 
+       y = NULL) + 
+  facet_wrap(~time, ncol = 1, scales = "free_y",labeller = labeller(time = c(`1` = "Time 1",`2` = "Time 2")))
+
+```
+
+
+## Levels of Cohesion, Collaboration, and Joint Decision Making 
+
+The more groups need to actually function as a team, the more important it is for the group to be cohesive, collaborate, and engage in joint decision making.
+
+### Cohesion
+
+The members of cohesive groups get along well, enjoy working with each other, and have good relationships.
+
+### Collaboration
+
+The members of collaborative groups volunteer to help manage the workload when teammates are busy, are flexible about switching responsibilities to make things easier for each other, are willing to help each other work and meet deadlines.
+
+### Joint Decision Making
+
+Groups that engage in joint decision making are able to better execute actions in a coordinated way. They have a clear understanding of each other’s needs and expectations, let each other know when their actions will affect another member’s work, and have a shared understanding of joint problems.
+
+The chart below provides a breakdown for each group of current levels of cohesion, collaboration, and joint decision making. As before, scores above 3 indicate that respondents generally agree that their group is cohesive, collaborates effectively, and engages in joint decision making. Scores below 3 indicate breakdowns in these critical aspects of teamwork.
+
+In several teams, there is a slight drop in reported collaboration, cohesion, and joint decision making. 
+
+#### {.tabset}
+
+##### Time 1 
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='show', fig.align="center", fig.height=12, fig.width=12, cache = F}
+data.frame(team = c("F&I","F&I","F&I","IG","IG","IG","People","People","People","PS","PS","PS","SLT","SLT","SLT","Support","Support","Support"), variable= c("Collaboration","Cohesion","Joint Decision Making"),value = c(3.2,3.8,4,3.2,3.8,3.4,3.8,4,3.8,2.9,3.6,3.5,3.4,3.8,4,3.6,4,4)) %>% 
+  mutate(variable = factor(variable,levels = c("Collaboration","Cohesion","Joint Decision Making"))) %>% 
+  ggplot(aes(x=variable, y=value, fill=variable)) + 
+    stat_summary(fun.y="mean", geom="bar", color="black", width = 0.5) +
+    stat_summary(aes(label=round(..y..,1)), fun.y="mean", geom="text", vjust = 2) +
+    geom_hline(yintercept = 3, linetype="solid", color = "red", size=1.5, alpha=0.25) +
+    coord_cartesian(ylim = c(1, 4)) +
+    scale_y_continuous(breaks = c(1:4), labels = c("Strongly Disagree", "Disagree", "Agree", "Strongly Agree")) +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          legend.position="bottom",
+          legend.title=element_blank(),
+          legend.text = element_text(margin = margin(r = 50, unit = "pt"))) + 
+    labs(title = NULL, 
+         x = NULL, 
+         y = NULL) + 
+    scale_fill_brewer(palette="Set3") +
+    facet_wrap(vars(team), ncol=3)
+```
+
+##### Time 2 
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='show', fig.align="center", fig.height=12, fig.width=12}
+t2_scores %>%
+  select(ID,starts_with("interdependence"),starts_with("cohesion"),starts_with("joint_decision")) %>% 
+  pivot_longer(!1) %>%
+  mutate(name = str_replace(name,"_ft\\d{1}$","")) %>% 
+  mutate(variable = recode_factor(name,
+                             "interdependence"="Collaboration",
+                             "cohesion"="Cohesion",
+                             "joint_decision_making"="Joint Decision Making")) %>%
+  mutate(ID = as.double(ID)) %>% 
+  left_join(t2_teams,by=c("ID")) %>% 
+  na.omit() %>% 
+  ggplot(aes(x=factor(variable), y=value, fill=variable)) + 
+    stat_summary(fun.y="mean", geom="bar", color="black", width = 0.5) +
+    stat_summary(aes(label=round(..y..,1)), fun.y="mean", geom="text", vjust = 2) +
+    geom_hline(yintercept = 3, linetype="solid", color = "red", size=1.5, alpha=0.25) +
+    coord_cartesian(ylim = c(1, 4)) +
+    scale_y_continuous(breaks = c(1:4), labels = c("Strongly Disagree", "Disagree", "Agree", "Strongly Agree")) +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          legend.position="bottom",
+          legend.title=element_blank(),
+          legend.text = element_text(margin = margin(r = 50, unit = "pt"))) + 
+    labs(title = NULL, 
+         x = NULL, 
+         y = NULL) + 
+    scale_fill_brewer(palette="Set3") +
+    facet_wrap(vars(team), ncol=3)
+```
+
+#### {.unlisted .unnumbered}
+
+## Leadership Outcomes  
+
+Leadership is a social process that enables individuals to work together to produce results they could not achieve alone. The organization’s success depends on each group's ability to generate three crucial outcomes of leadership: Direction, Alignment, and Commitment (DAC).  
+
+### Direction
+*Does the group agree on its overall goals?*
+
+### Alignment
+*Does the group coordinate its efforts to achieve those goals?*
+
+### Commitment
+*Do group members feel mutually responsible for the group's success?*
+
+Scores below 3 indicate that a group is failing to produce a crucial outcome of leadership. For example, the ED is struggling to produce a clear direction, which could ultimately undermine the strategic performance of the organization as a whole.  
+
+Groups who are not aligned may be dedicated and bought in but they are uncoordinated resulting in duplication of effort, people working at cross-purposes, and things falling through the cracks.
+
+Groups who lack commitment may be coordinated and know what they want to achieve but lack the energy to deliver on things that require real effort. 
+
+Groups without direction are willing and ready to collaborate but lack purpose. As a result they spin their wheels, feel uncertain about what they are trying to achieve together, and are pulled in different directions.
+
+Teams are maintaining high levels of direction, alignment, and commitment. 
+
+#### {.tabset}
+
+##### Time 1
+```{r echo=FALSE, fig.align="center", fig.height=12, fig.width=12, message=FALSE, warning=FALSE, results='show'}
+
+t1_scores %>%
+  select(ID,starts_with("direction"), starts_with("commitment"), starts_with( "alignment")) %>% 
+  pivot_longer(!1) %>%
+  mutate(variable = str_replace(name,"_ft\\d{1}$","")) %>% 
+  mutate(variable = recode_factor(variable,
+                             "direction"="Direction",
+                             "alignment"="Alignment",
+                             "commitment"="Commitment")) %>%
+na.omit() %>% 
+  left_join(t1_teams,by=c("ID" = "name")) %>% 
+  ggplot(aes(x=factor(variable), y=value, fill=variable)) + 
+    stat_summary(fun.y="mean", geom="bar", color="black", width = 0.5) +
+    stat_summary(aes(label=round(..y..,1)), fun.y="mean", geom="text", vjust = 2) +
+    geom_hline(yintercept = 3, linetype="solid", color = "red", size=1.5, alpha=0.25) +
+    coord_cartesian(ylim = c(1, 4)) +
+    scale_y_continuous(breaks = c(1:4), labels = c("Strongly Disagree", "Disagree", "Agree", "Strongly Agree")) +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          legend.position="bottom",
+          legend.title=element_blank(),
+          legend.text = element_text(margin = margin(r = 50, unit = "pt"))) + 
+    labs(title = NULL, 
+         x = NULL, 
+         y = NULL) + 
+    scale_fill_brewer(palette="Paired") +
+    facet_wrap(vars(team), ncol=3)
+```
+
+##### Time 2
+
+```{r echo=FALSE, fig.align="center", fig.height=12, fig.width=12, message=FALSE, warning=FALSE, results='show'}
+
+t2_scores %>%
+  select(ID,starts_with("direction"), starts_with("commitment"), starts_with( "alignment")) %>% 
+  pivot_longer(!1) %>%
+  mutate(variable = str_replace(name,"_ft\\d{1}$","")) %>% 
+  mutate(variable = recode_factor(variable,
+                             "direction"="Direction",
+                             "alignment"="Alignment",
+                             "commitment"="Commitment")) %>%
+  mutate(ID = as.double(ID)) %>% 
+  left_join(t2_teams,by=c("ID")) %>% 
+  na.omit() %>% 
+  ggplot(aes(x=factor(variable), y=value, fill=variable)) + 
+    stat_summary(fun.y="mean", geom="bar", color="black", width = 0.5) +
+    stat_summary(aes(label=round(..y..,1)), fun.y="mean", geom="text", vjust = 2) +
+    geom_hline(yintercept = 3, linetype="solid", color = "red", size=1.5, alpha=0.25) +
+    coord_cartesian(ylim = c(1, 4)) +
+    scale_y_continuous(breaks = c(1:4), labels = c("Strongly Disagree", "Disagree", "Agree", "Strongly Agree")) +
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          legend.position="bottom",
+          legend.title=element_blank(),
+          legend.text = element_text(margin = margin(r = 50, unit = "pt"))) + 
+    labs(title = NULL, 
+         x = NULL, 
+         y = NULL) + 
+    scale_fill_brewer(palette="Paired") +
+    facet_wrap(vars(team), ncol=3)
+```
+
+#### {.unlisted .unnumbered}
+
+## Effective Collaboration Comment Summary  
+
+Respondents were asked, “A key goal of this study is to better understand the challenges or problems you or your team are facing in terms of collaborating with other people and other groups. Where does collaboration need to improve?” Twenty-five participants responded, and themes with exemplary quotes are presented here under each theme. The percent of responses that were classified into each theme is presented in parentheses. The full list of responses is in the Effective Collaboration section of the Appendix.
+
+**Align Teams Across Departments and Foster Understanding Among Them (37%)**  
+
+-	Everywhere, everyone is so busy and focused on their own thing they don't have time to think about the bigger picture or how we all interact.
+-	Flight ops and Patient services need to be more aligned with the way they work together and they are both difficult groups to collaborate with because they are focused on delivering operations.
+-	Greater understanding of the challenges faced by each team and acceptance of these challenges (this is working better with some departments than others).  Workload levels may play a factor in this, everyone is busy pushing forwards on their own objectives but we probably need a bit more focus on time as an SLT/HOD group exploring what projects and challenges each team is facing so we better understand each other, are more tolerant and flexible in light of what may be going on in departments outside our own.  This is definitely starting to improve with more frequent and focused SLT/HOD meetings.
+
+**Consider Adjusting the Timing and Channels by which Teams Across DAA Communicate (30%)**  
+*Note this same issue was mentioned at Time 1.*  
+
+-	Early sharing of information regarding small-scale future changes to ensure they are properly managed.
+-	Clearer priorities encouraging more clarity and consistency in messaging.
+-	The desire and the goodwill to collaborate is perceived to be there in my opinion. I often find not having enough time is the main issue with starting new projects/collaborating. Teams is an excellent resource, but could be utilised better with further training.
+-	The Microsoft Teams communication Platform needs to better structured it has become clunky and difficult to find relevant information on. It would also be good to understand better the skill sets of staff across the structure.
+
+**Cultivate a Shared Understanding of Prioritizing Organization's Mission over Individual Interests (33%)**  
+
+-	Balancing workload pressures against conflicting priorities and the desire to press on within other departments when we are unable to provide all necessary information within others set timelines.
+-	Where priorities between teams is not understood jointly and to a good level, they are unlikely to align. Where they do align, this may well be without intention. In the current financial situation, some interactions and delivery of strategy is by necessity, more sequential rather than integral/intense. With the priority and effort quite rightly needed to increase our income (to ensure sustainability), other priorities have to be managed in a way that defers to securing the financial means to undertake our broader Mission and realise some aspects of our vision.
+-	Shared understanding and acceptance that we are here for our patients and the people of Devon - and that this is a priority over the expansion of individual freedoms.
+
+# Study Background
+
+The development and delivery of this report was supported in part by the National Science Foundation (NSF SES 2054433 PI-Cullen-Lester; #2320876 PI-Carter) and a Behavioral Research Assistance Grant from the C. T. Bauer College of Business, University of Houston. We would like to thank the following individuals for their contributions to earlier iterations of this report (Greg Bean, Director of the Gutierrez Energy Management Institute (GEMI), C.T. Bauer College of Business, University of Houston; Curtis Hampton, Data Scientist, Houston Lester, Ph.D., Quantitative Psychologist; Chris Ross, Faculty Emeritus, C.T. Bauer College of Business, University of Houston; Stephanie Wormington, Ph.D., Research Scientist, Global Research and Evaluation, Center for Creative Leadership)
+
+## Principal Investigators (Research Leads)
+
+**Kristin Cullen-Lester, Ph.D.**  
+Assistant Professor of Management  
+University of Mississippi  
+kclester@olemiss.edu 
+
+**Dorothy Carter, Ph.D.**  
+Associate Professor  
+Department of Psychology  
+Michigan State University  
+dcarter3@msu.edu  
+
+## Report Contributors  
+
+We would like to thank the following individuals (in alphabetical order) for their contributions to the development of this report.
+
+**Justin Jones, Ph.D.**  
+Post-Doctoral Research Associate  
+Department of Management    
+University of Florida  
+
+**Michelle Mahdon, Ph.D.**  
+Research Fellow  
+University of Exeter Business School
+
+**Pol Solanelles**  
+Ph.D. Student  
+Department of Management  
+University of Mississippi  
+
+
+This study is conducted as part of an ongoing partnership between the University of Mississippi, Michigan State University, and the University of Exeter. The aim of this study is to understand the complex web of relationships connecting managers at the top of organizations and how these relationships drive the top team’s performance and the organization’s success.
+
+The design of the project is grounded in ours and others earlier research:  
+
+- Cullen-Lester, K. L., Maupin, C. K., & Carter, D. R. (2017). Incorporating social networks into leadership development: A conceptual model and evaluation of research and practice. The Leadership Quarterly, 28(1), 130-152.
+- Carter, D. R., DeChurch, L. A., Braun, M. T., & Contractor, N. S. (2015). Social network approaches to leadership: An integrative conceptual review. Journal of Applied Psychology, 100(3), 597-622.
+- Raes, A. M., Heijltjes, M. G., Glunk, U., & Roe, R. A. (2011). The interface of the top management team and middle managers: A process model. Academy of Management Review, 36(1), 102-126. 
+
+The data presented in this report were collected by using/adapting published scales from the following sources:
+
+- Arnold, J. A., Arad, S., Rhoades, J. A., & Drasgow, F. (2000). The empowering leadership questionnaire: The construction and validation of a new scale for measuring leader behaviors. Journal of Organizational Behavior, 249-269.
+- Gupta, A. K., & Govindarajan, V. (1984). Business unit strategy, managerial characteristics, and business unit effectiveness at strategy implementation. Academy of Management journal, 27(1), 25-41.
+- Hornsey, M. J., Olsen, S., Barlow, F. K., & Oei, T. P. (2012). Testing a single-item visual analogue scale as a proxy for cohesiveness in group psychotherapy. Group Dynamics: Theory, Research, and Practice, 16(1), 80.
+- Jansen, J. J., Van Den Bosch, F. A., & Volberda, H. W. (2006). Exploratory innovation, exploitative innovation, and performance: Effects of organizational antecedents and environmental moderators. Management science, 52(11), 1661-1674.
+- Knight, D., Pearce, C. L., Smith, K. G., Olian, J. D., Sims, H. P., Smith, K. A., & Flood, P. (1999). Top management team diversity, group process, and strategic consensus. Strategic Management Journal, 445-465.
+- McCauley, C., Braddy, P., & Cullen-Lester, K. L. (2018). Measuring the outcomes of leadership: Direction, Alignment, and Commitment scale development. Working Paper
+- Noble, C. H., & Mokwa, M. P. (1999). Implementing marketing strategies: Developing and testing a managerial theory. The Journal of Marketing, 57-73.
+- Quinn, R. W. (2005). Flow in knowledge work: High performance experience in the design of national security technology. Administrative Science Quarterly, 50(4), 610-641.
+- Simsek, Z., Veiga, J. F., Lubatkin, M. H., & Dino, R. N. (2005). Modeling the multilevel determinants of top management team behavioral integration. Academy of Management Journal, 48(1), 69-84.
+- Tallon, P. P., & Pinsonneault, A. (2011). Competing perspectives on the link between strategic information technology alignment and organizational agility: insights from a mediation model. Mis Quarterly, 463-486.
+- Van Der Vegt, G., Emans, B., & Van De Vliert, E. (1998). Motivating effects of task and outcome interdependence in work teams. Group & Organization Management, 23(2), 124-143.
+
+## Appendix 
+
+### Challenges to Strategic Implementation Comments  
+
+* Maintaining the income and increasing it enough to deliver our ambitions.
+* Maintaining reliable, effective HEMS capability whilst concurrently introducing changes to the manner in which HEMS is delivered.  Achieving changes in a transformational manner which keeps staff engaged with and part of the process. Reducing DAA's carbon footprint whilst continuing to utilise helicopters and ICE vehicles. Achieving a more diverse workforce within the HEMS operations area where demographically white, males are the majority group (both aviation and clinical staff).  
+* Finance. We have created many new roles over the last 12 months, each is generating more work, needing more roles to support. It feels like we've got stuck in a role creating loop. There are just so many projects that each team is undertaking at the same time. 
+* Staff backing the strategy.
+* Income - generating enough income, ensuring budgets are clear and not exceeded unless new income streams are identified, ensuring value for money in areas such as procurement and technology. Ensuring the right people are in place to deliver the above. Ensuring that the strategy is referred to often and that all business objectives align and feed into support the overall strategy.
+* Constraint on resources.
+* Getting the right people in and trained up for the new roles. Induction process is key to getting this right and making sure our employees are ready for anything.
+* Having the right people in the right roles with the skills needed. Induction - getting it right, not only for DAA induction also each department. Allowing enough time for induction and learning without overloading them too much. 
+* Delivering a extensive module of change brings confusion and cultural shifts. Communication is key and there is a need to improve communication at every level. From our IT systems, our digital market place and the structures around our development. Cascading intent, information as we outreach to staff, volunteers and supporters whilst also ensuring innovative methods of reaching the said audience. I believe our world is on the cusp of great change as it challenges its identity and we need to be at its forefront, including in areas of our thinking, technology and enterprise. 
+* Income generation to finance patient care.
+* Financial capacity. Also capacity within teams to deliver new projects/initiatives. The systems, tools and resources required.
+* Lack of income due to people’s personal circumstances. Lack of diverse applicants. Lack of skilled employees in specialist areas. Rising costs of fuel, resources and equipment 
+* Key skills within the organisation in order to deliver on the plans. It strikes me that there are some very qualified people who are stretched already and if this expansion is going to go ahead then we either need to upskill or expand skill across the organisation to ensure success. Secondly I would argue we are still in an uncertain financial environment and delivery of the income generation strategy is fundamental to achieving the aims. 
+* Unknown market changes. Keeping everyone on board and well informed.
+* Getting the right people into new roles to help drive the strategy. Need to get the whole team onboard for the net zero plan as well. Many of the questions have focused on building digital skills but investment in new, modern CRM and digital systems is required to enable to achievement of the strategy (it is built in and been looked into so I feel there is sufficient movement in this sector)
+* Commitment to this strategy - by all staff, SLT and Board. Ensuring we dedicate the correct resources and investment needed. 
+* Growth in income. 
+* Increasing the income in the current economic climate
+* Understanding the financial implications of our aspirations and getting a handle on where the money will be coming from.
+* Volatility of operating environment and unpredictability of events that impact our work in terms of service delivery and/or income generation. Alignment of all HODs with what's best for the primary strategic objectives and not just what's best for their team. Internal communications and engagement as the workforce expands.
+* Lack of resources - people and money. understanding the reasons behind the strategy.
+* Increasing fundraising income to support it's objectives.
+* Financial implications of the cost of living is a big concern. Engagement and buy in from the wider organisation is imperative.
+* Cost pressures associated with the next phase of development. Hiring the right people to drive the organisation forward in a challenging recruitment market.
+* Weak leadership at the top of the organisation that has permitted a “them and us” culture between internal departments (Patient Services & Flight Operations) that has become endemic over many years.
+* High workloads of the organisation. Cost of living crisis affecting peoples ability to donate and also soaring costs for the organisation. High costs for current 'green' alternatives.
+* Fundraising during the current cost of living environment.
+* Although DAA has amazing support throughout Devon and surrounding areas, the cost of living crisis might impact on our funding. Getting the message right to our supporters why we are spending ¬£m's on a new airbase/academy. Capital Appeal, what impact is this going to have on other income streams?
+* Shared culture and shared understanding of mission and our roles in achieving this. Solving politics / potential power games.
+
+### Changes to Strategic Implementation Comments  
+
+* Communication to all levels of leadership needs to be consistent. Communication has been slow and sometimes gone missing as to the progress with the strategic plan.
+* In case I've misunderstood the phrasing of the above questions, to clarify - I'm not sure that the planning for the implementation of strategies/projects fully understands the extra resource required from support teams.    
+* We are an ambitious group, to undertake all the of work identified at times it can feel under-resourced, however this is often a result of the group trying to do too much in one go.  A more structured approach to priorities across the group would be welcome, giving oversight and enabling us to clearly identify touch points between different departments on different objectives and projects.
+* Difficult to fully assess the performance, budget and accuracy of information as not all of the story is in the wider domain. The expenditure made also brings benefit to several areas of influence and infrastructure of different departments or areas of focus. 
+* Going forward it would be useful to receive regular updates on how major work streams are going to be prioritised within each horizon for each team. This will help us to understand where to plan additional resource in order to support the delivery of their strategic goals as required.
+* Core operations is driven by reactive necessity of delivering care to patients; it is understood. Elements of the new strategy, academy, training, drones etc. are ventures into the limited information sphere, i.e. some parts of them will be speculative. This comes with risk without doubt, I think we have to lean into risk like this and potentially continually justify it for a certain amount of time until they either speak for themselves or it is recognised they aren't working as expected. Criticism often comes from the organisation embedded in an aversion to risk but if we are going to have an enhanced societal impact then the route couldn't be much more appropriate (in my limited understanding) and from this I would actively and openly talk about the risk associated, own the risk and invite the organisation to engage with the risk. 
+* The "Why's" need to be better communicated more effectively. Decisions are made so fast it is easy to forget to communicate what is happening and why.
+* DAA is recruiting additional resource to help achieve the strategy along with a new CRM system. Once all of these are in place my answers above will be very different.
+* Efficient use of resources. Silo mentality Them/Us (Trust / trading) - not intentional but it is there - different cultures/ expectations on social interaction (lack of Ops staff interaction on general teams chats). More inspirational touchpoints for people interactions.
+* I think the refreshed strategic plan itself incorporates the things we need to change in order to be more effective in achieving its strategy. We have to bring in the money to pay for it. We need to invest in people to do this. We need to work smarter using digital and tech. Above all we need our people to live our values so we can genuinely take the initiative, lead the way and work better together. 
+* Understanding the data to support the key business decisions and strategy. Pull on a wider aspect of DAA not just from patient services angle. Leadership by having more visibility from SLT. Involving HODS more.
+* I think the organisation would benefit from a more corporate approach when negotiating the upcoming HQ acquisition. There could be vast cost savings made if done correctly and drawing from outside expertise could be invaluable for this project. 
+* If the organisation is committed to operating 2 helicopters, they must be of the same type in order to be efficient. Currently, 6 monthly and annual flying training and checking is doubled up with 2 different aircraft. A single type would halve the training/checking requirement, saving many tens of thousands of pounds each year. 
+* departments work well together but are all busy and a way for even better communication on projects and priorities will help to increase effort, understanding and collaboration even further.
+
+### Effective Collaboration Comments  
+
+* Flight ops and Patient services need to be more aligned with the way they work together and they are both difficult groups to collaborate with because they are focused on delivering operations.
+* Early sharing of information regarding small-scale future changes to ensure they are properly managed.
+* Mainly around making decisions that effect other teams.
+* Nil requirement for improvement.
+* Greater understanding of the challenges faced by each team and acceptance of these challenges (this is working better with some departments than others). Workload levels may play a factor in this, everyone is busy pushing forwards on their own objectives but we probably need a bit more focus on time as an SLT/HOD group exploring what projects and challenges each team is facing so we better understand each other, are more tolerant and flexible in light of what may be going on in departments outside our own. This is definitely starting to improve with more frequent and focused SLT/HOD meetings.
+* Clearer priorities encouraging more clarity and consistency in messaging.
+* The desire and the goodwill to collaborate is perceived to be there in my opinion. I often find not having enough time is the main issue with starting new projects/collaborating. Teams is an excellent resource, but could be utilised better with further training.
+* The Microsoft Teams communication Platform needs to better structured it has become clunky and difficult to find relevant information on. It would also be good to understand better the skill sets of staff across the structure. 
+* Time to review strategy and its benefits. 
+* Between functions/teams to reduce/remove barriers and silos.
+* I think collaboration is already very strong between our team and other functions, although working closely on future projects and work streams will further improve relationships and the understanding of each other’s roles. We do have a problem with being able to collaborate directly with operational crew members currently and often feel that permission must be gained by Heads of Patient Services and SLT before we are able to make direct contact with crew regarding their support in completing our objectives.
+* I'm a bit of a stuck record on this but I am a big advocate of in person interaction, I am currently working to get my own team more into the office more regularly and I know this is becoming a more common ask across the support departments in particular. I actively encourage non work related chit chat. I know we’re working on a hybrid working policy that will better act as a formal document for expectations. I have personally noticed more SLT members in the office on a flexible basis and I welcome this hugely as it definitely helps with making the case for attendance and the natural interactions that flow. 
+* Everywhere, everyone is so busy and focused on their own thing they don't have time to think about the bigger picture or how we all interact.
+* Proactivity by SLT in seeking challenge and support by trustees, while working within the availability constraints. Understand that trustees do not have to be subject matter experts to offer valuable input. Acknowledge that the Board accepts when innovating and striving for ambitious growth, mistakes may be made and answers unknown. Seek collaboration and be curious in problem solving.
+* We do have some opportunities to collaborate with other teams on projects though this could increase. However, a barrier to getting involved is not having enough time to be able to do this to workload.
+* Support functions listening not hearing the needs from teams that require resources to generate income to keep the charity moving.
+* Some people think collaboration is consultation on something they've already done, that's ready to go. I'd like to see more early engagement between and among leaders and teams at all levels so collaboration is genuine. Many people are getting this right but there are still examples of people informing or consulting on what is a fait accompli. I think this is a minority. Some people are also deferential to stronger characters but we all at SLT/HOD/senior manager level be able to respectfully challenge one another. Again, don't want to overplay this as most people do!
+* SLT
+* Cross department, all pulling in the same direction.
+* Developing an environment of constructive challenge between SLT and the board which does not cause the SLT to think the board are being critical.
+* Collaboration needs to improve between Flight Operations and Patient Services, but this is always restricted by the cultural issues between these departments. It also needs to improve between our team and the SLT as a whole.
+* Balancing workload pressures against conflicting priorities and the desire to press on within other departments when we are unable to provide all necessary information within others set timelines.
+* Where priorities between teams is not understood jointly and to a good level, they are unlikely to align. Where they do align, this may well be without intention. In the current financial situation, some interactions and delivery of strategy is by necessity, more sequential rather than integral/intense. With the priority and effort quite rightly needed to increase our income (to ensure sustainability), other priorities have to be managed in a way that defers to securing the financial means to undertake our broader Mission and realise some aspects of our vision.
+* As DAA is growing with personnel and there is still hybrid working, relationships still need enhancing, more interaction within teams and need to get the "family" feel back.
+* Shared understanding and acceptance that we are here for our patients and the people of Devon - and that this is a priority over the expansion of individual fiefdoms.
+
